@@ -637,40 +637,17 @@ function updateEmailResult(id, email, status) {
 function saveManualEmail(id) { const v = document.getElementById('manual-'+id).value.trim(); if (v) updateEmailResult(id, v, 'found'); }
 
 async function aiSearchVenue(venue) {
-  // Searches Venue Directory + web for BOTH email AND capacity in one call
   if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
   const location = document.getElementById('location').value.trim();
-  const reqDelegates = parseInt(document.getElementById('delegates').value) || 0;
-  const reqBedrooms = parseInt(document.getElementById('bedrooms').value) || 0;
 
-  const prompt = `You must find the events email address, max capacity, and bedroom count for "${venue.name}" in ${location}, UK.
+  const prompt = `Search venuedirectory.com for "${venue.name}" in ${location} UK. Find their Venue Directory listing page and visit it. The page contains email addresses listed as "Email: someone@venue.com" in the contacts section, plus capacity and bedroom numbers.
 
-STEP 1 — Search Venue Directory:
-Search for: ${venue.name} ${location} venuedirectory.com
-Then visit the Venue Directory page you find. The page will contain lines like:
-  Email: events@venue.com
-  Email: enquiries@venue.com
-  Max capacity: 150
-  Bedrooms: 80
-Extract ALL of these values from the page. The emails appear after "Email:" labels in the contact section.
+Also search Google for: "${venue.name}" ${location} events email
 
-STEP 2 — If no Venue Directory page found:
-Search for: "${venue.name}" ${location} events email address conference
-Visit their website contact or meetings page and find the email.
+Return ONLY valid JSON like this example — no explanation, no markdown, nothing else:
+{"email":"eventsdesk@malmaison.com","emailFound":true,"capacity":120,"bedroomsFound":72,"dataSource":"venuedirectory"}
 
-STEP 3 — Also try:
-Search for: "${venue.name}" ${location} conference enquiries email
-
-IMPORTANT RULES:
-- You MUST actually visit the page URLs you find, not just read search snippets
-- Venue Directory pages always have emails listed — look for "Email:" followed by email addresses
-- Accept any email: events@, eventsdesk@, eventsmgr@, enquiries@, meetings@, info@, reservations@
-- For capacity use the largest delegate/theatre figure
-- For bedrooms use total hotel room count
-
-Return ONLY this JSON with no other text:
-{"email":"events@venue.com","emailFound":true,"capacity":200,"bedroomsFound":100,"dataSource":"venuedirectory"}
-Use null for any value not found. emailFound must be true/false.`;
+If email not found: {"email":"","emailFound":false,"capacity":null,"bedroomsFound":null,"dataSource":"notfound"}`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -684,25 +661,36 @@ Use null for any value not found. emailFound must be true/false.`;
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2000,
-        tools: [
-          { type: 'web_search_20250305', name: 'web_search' }
-        ],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await resp.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    const clean = text.replace(/```json|```/g,'').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) return { email: null, capacity: null, bedrooms: null };
-    const parsed = JSON.parse(jsonMatch[0]);
+    if (data.error) { console.warn('API error:', data.error); return { email: null, capacity: null, bedrooms: null }; }
+
+    // Get all text blocks from the response
+    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
+    const fullText = textBlocks.join('');
+
+    // Find the last JSON object in the response (most likely to be the final answer)
+    const jsonMatches = [...fullText.matchAll(/\{[^{}]*"emailFound"[^{}]*\}/g)];
+    if (!jsonMatches.length) {
+      console.warn('No JSON found in response for', venue.name, '| Response:', fullText.slice(0, 300));
+      return { email: null, capacity: null, bedrooms: null };
+    }
+
+    const lastMatch = jsonMatches[jsonMatches.length - 1][0];
+    const parsed = JSON.parse(lastMatch);
     return {
-      email: parsed.emailFound ? parsed.email : null,
+      email: parsed.emailFound && parsed.email ? parsed.email : null,
       capacity: parsed.capacity || null,
       bedrooms: parsed.bedroomsFound || null,
       dataSource: parsed.dataSource || 'unknown'
     };
-  } catch(e) { return { email: null, capacity: null, bedrooms: null }; }
+  } catch(e) {
+    console.warn('aiSearchVenue error for', venue.name, e.message);
+    return { email: null, capacity: null, bedrooms: null };
+  }
 }
 
 async function aiSearchEmail(venue) {
