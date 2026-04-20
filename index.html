@@ -174,10 +174,15 @@
   <div class="card" id="resultsCard" style="display:none;">
     <div class="card-title">Search Results</div>
     <div id="venueTypes">
-      <div class="filter-row">
+      <div class="filter-row" style="margin-bottom:8px;">
         <label class="filter-check"><input type="checkbox" checked id="filterHotel" onchange="applyFilters()"> Hotels</label>
         <label class="filter-check"><input type="checkbox" checked id="filterConference" onchange="applyFilters()"> Conference Centres</label>
         <label class="filter-check"><input type="checkbox" checked id="filterOther" onchange="applyFilters()"> Other Venues</label>
+      </div>
+      <div class="filter-row">
+        <label class="filter-check"><input type="checkbox" checked id="filterConfirmed" onchange="applyFilters()"> <span style="color:#0f6e56;">✓ Capacity confirmed</span></label>
+        <label class="filter-check"><input type="checkbox" checked id="filterUnconfirmed" onchange="applyFilters()"> <span style="color:#854f0b;">? Capacity unconfirmed</span></label>
+        <label class="filter-check"><input type="checkbox" id="filterTooSmall" onchange="applyFilters()"> <span style="color:#a32d2d;">✗ Too small</span></label>
       </div>
     </div>
     <div class="toolbar">
@@ -442,23 +447,54 @@ async function searchVenues() {
 function getCapacityStatus(v) {
   const reqDelegates = parseInt(document.getElementById('delegates').value) || 0;
   const reqBedrooms = parseInt(document.getElementById('bedrooms').value) || 0;
-  if (v.osmCapacity || v.osmBedrooms) {
-    // We have OSM data — check against requirements
-    const capOk = !reqDelegates || !v.osmCapacity || v.osmCapacity >= reqDelegates;
-    const bedOk = !reqBedrooms || !v.osmBedrooms || v.osmBedrooms >= reqBedrooms;
+  // Prefer AI-fetched data (from Venue Directory) over OSM
+  const cap = v.aiCapacity || v.osmCapacity || null;
+  const beds = v.aiBedrooms || v.osmBedrooms || null;
+  if (cap !== null || beds !== null) {
+    const capOk = !reqDelegates || cap === null || cap >= reqDelegates;
+    const bedOk = !reqBedrooms || beds === null || beds >= reqBedrooms;
     if (capOk && bedOk) return 'confirmed';
-    return 'no'; // confirmed too small
+    return 'no';
   }
-  return 'unconfirmed'; // no data — needs checking
+  return 'unconfirmed';
+}
+
+function getCapacityLabel(v) {
+  const cap = v.aiCapacity || v.osmCapacity || null;
+  const beds = v.aiBedrooms || v.osmBedrooms || null;
+  const src = v.aiDataSource ? ` · via ${v.aiDataSource}` : '';
+  const status = getCapacityStatus(v);
+  if (status === 'confirmed') {
+    const parts = [];
+    if (cap) parts.push(`${cap} cap`);
+    if (beds) parts.push(`${beds} rooms`);
+    return '✓ ' + (parts.length ? parts.join(' · ') : 'Capacity confirmed') + src;
+  }
+  if (status === 'no') {
+    const parts = [];
+    if (cap) parts.push(`${cap} cap`);
+    if (beds) parts.push(`${beds} rooms`);
+    return '✗ Too small' + (parts.length ? ': ' + parts.join(' · ') : '') + src;
+  }
+  return '? Capacity unconfirmed';
 }
 
 function applyFilters() {
   const showH = document.getElementById('filterHotel').checked;
   const showC = document.getElementById('filterConference').checked;
   const showO = document.getElementById('filterOther').checked;
-  filteredVenues = allVenues.filter(v =>
-    (v.type==='hotel'&&showH) || (v.type==='conference'&&showC) || (v.type==='other'&&showO)
-  );
+  const showConfirmed = document.getElementById('filterConfirmed').checked;
+  const showUnconfirmed = document.getElementById('filterUnconfirmed').checked;
+  const showTooSmall = document.getElementById('filterTooSmall').checked;
+  filteredVenues = allVenues.filter(v => {
+    const typeOk = (v.type==='hotel'&&showH) || (v.type==='conference'&&showC) || (v.type==='other'&&showO);
+    if (!typeOk) return false;
+    const cap = getCapacityStatus(v);
+    if (cap==='confirmed' && !showConfirmed) return false;
+    if (cap==='unconfirmed' && !showUnconfirmed) return false;
+    if (cap==='no' && !showTooSmall) return false;
+    return true;
+  });
   currentPage = 1;
   document.getElementById('resultCount').textContent = filteredVenues.length + ' venue' + (filteredVenues.length!==1?'s':'') + ' found';
   renderPage();
@@ -486,7 +522,7 @@ function renderPage() {
     const typeLabel = v.type==='hotel'?'Hotel':v.type==='conference'?'Conference':'Venue';
     const typeClass = v.type==='hotel'?'tag-hotel':v.type==='conference'?'tag-conference':'tag-other';
     const capStatus = getCapacityStatus(v);
-    const capLabel = capStatus==='confirmed' ? (v.osmCapacity ? `✓ Capacity: ${v.osmCapacity}` : '✓ Capacity confirmed') : capStatus==='no' ? `✗ Too small (${v.osmCapacity||'?'} cap)` : '? Capacity unconfirmed';
+    const capLabel = getCapacityLabel(v);
     const capClass = capStatus==='confirmed'?'tag-capacity-confirmed':capStatus==='no'?'tag-capacity-no':'tag-capacity-unconfirmed';
     div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id)?'checked':''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address?`<div class="venue-address">${v.address}</div>`:''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}<span class="tag ${capClass}">${capLabel}</span>${v.phone?`<span class="tag tag-distance">${v.phone}</span>`:''}</div></div>`;
     list.appendChild(div);
@@ -600,38 +636,35 @@ function updateEmailResult(id, email, status) {
 
 function saveManualEmail(id) { const v = document.getElementById('manual-'+id).value.trim(); if (v) updateEmailResult(id, v, 'found'); }
 
-async function aiSearchEmail(venue) {
-  if (!apiKeyStored) return null;
+async function aiSearchVenue(venue) {
+  // Searches Venue Directory + web for BOTH email AND capacity in one call
+  if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
   const location = document.getElementById('location').value.trim();
+  const reqDelegates = parseInt(document.getElementById('delegates').value) || 0;
+  const reqBedrooms = parseInt(document.getElementById('bedrooms').value) || 0;
 
-  const messages = [
-    {
-      role: 'user',
-      content: `I need the events or conference enquiry email address for "${venue.name}" in ${location}, UK.
+  const prompt = `Find information about the venue "${venue.name}" in ${location}, UK.
 
-Search in this order — stop as soon as you find an email:
+I need: 1) Their events/conference enquiry email address, 2) Their maximum delegate/meeting capacity, 3) Number of bedrooms/hotel rooms.
 
-Step 1: Search for: site:venuedirectory.com "${venue.name}" ${location}
-- Visit the Venue Directory listing if found and get the email from there.
-
-Step 2: Search for: "${venue.name}" ${location} events email address
-- Look carefully at all search results for any email address.
-
-Step 3: Visit the venue's own website contact or meetings/events page directly and look for an email.
-
-Step 4: Search for: "${venue.name}" ${location} conference enquiries contact email
+Search in this order:
+Step 1: Search: site:venuedirectory.com "${venue.name}" ${location}
+- Visit the Venue Directory listing page if found. It shows capacity, bedrooms, and email addresses directly on the page.
+Step 2: If not on Venue Directory, search: "${venue.name}" ${location} events email capacity delegates bedrooms
+Step 3: Visit the venue's own website contact/meetings/events/conferences page.
 
 Rules:
-- Accept ANY email — events@, conferences@, meetings@, info@, reservations@, sales@, enquiries@ etc
-- Do not give up after one search — work through all steps before returning not found
-- If you find an email address ANYWHERE, return it
+- Accept ANY events/meetings email — events@, conferences@, meetings@, enquiries@, info@, reservations@, sales@ etc
+- For capacity, take the LARGEST room/theatre capacity figure you can find
+- For bedrooms, take the total number of hotel bedrooms/rooms
+- Do not give up after one failed search — try all steps
 
-Return ONLY this exact JSON format, no other text whatsoever:
-{"email":"found@example.com","found":true}
-Or if truly nothing found after all steps:
-{"email":"","found":false}`
-    }
-  ];
+Return ONLY this exact JSON, no other text:
+{"email":"found@example.com","emailFound":true,"capacity":150,"bedroomsFound":80,"dataSource":"venuedirectory"}
+If email not found use: "email":"","emailFound":false
+If capacity not found use: "capacity":null
+If bedrooms not found use: "bedroomsFound":null
+dataSource should be "venuedirectory", "website", or "google"`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -644,18 +677,29 @@ Or if truly nothing found after all steps:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
+        max_tokens: 1000,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: messages
+        messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await resp.json();
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const jsonMatch = text.match(/\{"email"[\s\S]*?"found"\s*:\s*(true|false)\s*\}/);
-    if (!jsonMatch) return null;
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) return { email: null, capacity: null, bedrooms: null };
     const parsed = JSON.parse(jsonMatch[0]);
-    return parsed.found ? parsed.email : null;
-  } catch(e) { return null; }
+    return {
+      email: parsed.emailFound ? parsed.email : null,
+      capacity: parsed.capacity || null,
+      bedrooms: parsed.bedroomsFound || null,
+      dataSource: parsed.dataSource || 'unknown'
+    };
+  } catch(e) { return { email: null, capacity: null, bedrooms: null }; }
+}
+
+async function aiSearchEmail(venue) {
+  const result = await aiSearchVenue(venue);
+  return result.email;
 }
 
 async function findAllEmails() {
@@ -670,9 +714,22 @@ async function findAllEmails() {
     document.getElementById('progressFill').style.width = ((i/venues.length)*100)+'%';
     document.getElementById('progressText').textContent = `Searching ${i+1} of ${venues.length}: ${v.name}`;
     updateEmailResult(v.id,'','searching');
-    if (v.email) { updateEmailResult(v.id,v.email,'found'); continue; }
-    if (apiKeyStored) { const found = await aiSearchEmail(v); updateEmailResult(v.id,found||'',found?'found':'not-found'); }
-    else updateEmailResult(v.id,'','not-found');
+    if (v.email && v.aiChecked) { updateEmailResult(v.id,v.email,'found'); continue; }
+    if (apiKeyStored) {
+      const result = await aiSearchVenue(v);
+      // Update venue capacity data if we got it
+      if (result.capacity || result.bedrooms) {
+        v.aiCapacity = result.capacity;
+        v.aiBedrooms = result.bedrooms;
+        v.aiDataSource = result.dataSource;
+        v.aiChecked = true;
+        // Re-render current page to update capacity badges
+        renderPage();
+      }
+      const emailToUse = result.email || v.email || '';
+      updateEmailResult(v.id, emailToUse, emailToUse ? 'found' : 'not-found');
+    }
+    else updateEmailResult(v.id, v.email||'', v.email?'found':'not-found');
     await new Promise(r=>setTimeout(r,400));
   }
   document.getElementById('progressFill').style.width='100%';
