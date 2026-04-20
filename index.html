@@ -639,15 +639,33 @@ function saveManualEmail(id) { const v = document.getElementById('manual-'+id).v
 async function aiSearchVenue(venue) {
   if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
   const location = document.getElementById('location').value.trim();
+  // Build a specific venue+city search term
+  const cityGuess = location.split(',')[0].trim();
+  const venueFull = venue.name.toLowerCase().includes(cityGuess.toLowerCase())
+    ? venue.name
+    : `${venue.name} ${cityGuess}`;
 
-  const prompt = `Search venuedirectory.com for "${venue.name}" in ${location} UK. Find their Venue Directory listing page and visit it. The page contains email addresses listed as "Email: someone@venue.com" in the contacts section, plus capacity and bedroom numbers.
+  const prompt = `I need the events/conference email address, max delegate capacity, and bedroom count for this UK venue: "${venueFull}".
 
-Also search Google for: "${venue.name}" ${location} events email
+Do these steps in order:
 
-Return ONLY valid JSON like this example — no explanation, no markdown, nothing else:
+1. Search for: ${venueFull} site:venuedirectory.com
+   Visit the Venue Directory page. It lists emails like: Email: eventsdesk@malmaison.com
+   Copy the first events/conference email you see.
+
+2. If step 1 fails, search for: ${venueFull} events email
+   Visit the venue website contact or meetings page.
+
+3. If still nothing, search for: "${venue.name}" ${location} conference enquiries email
+
+Return ONLY this JSON — no other text at all:
 {"email":"eventsdesk@malmaison.com","emailFound":true,"capacity":120,"bedroomsFound":72,"dataSource":"venuedirectory"}
 
-If email not found: {"email":"","emailFound":false,"capacity":null,"bedroomsFound":null,"dataSource":"notfound"}`;
+Rules:
+- emailFound is true if you found ANY email, false if genuinely nothing exists online
+- capacity = largest meeting room/theatre capacity number found (integer or null)
+- bedroomsFound = total hotel bedrooms (integer or null)
+- dataSource = "venuedirectory", "website", or "google"`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -668,19 +686,16 @@ If email not found: {"email":"","emailFound":false,"capacity":null,"bedroomsFoun
     const data = await resp.json();
     if (data.error) { console.warn('API error:', data.error); return { email: null, capacity: null, bedrooms: null }; }
 
-    // Get all text blocks from the response
-    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
-    const fullText = textBlocks.join('');
+    const fullText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    console.log('AI response for', venue.name, ':', fullText.slice(0, 400));
 
-    // Find the last JSON object in the response (most likely to be the final answer)
+    // Find JSON object containing emailFound
     const jsonMatches = [...fullText.matchAll(/\{[^{}]*"emailFound"[^{}]*\}/g)];
     if (!jsonMatches.length) {
-      console.warn('No JSON found in response for', venue.name, '| Response:', fullText.slice(0, 300));
+      console.warn('No JSON found for', venue.name);
       return { email: null, capacity: null, bedrooms: null };
     }
-
-    const lastMatch = jsonMatches[jsonMatches.length - 1][0];
-    const parsed = JSON.parse(lastMatch);
+    const parsed = JSON.parse(jsonMatches[jsonMatches.length - 1][0]);
     return {
       email: parsed.emailFound && parsed.email ? parsed.email : null,
       capacity: parsed.capacity || null,
@@ -688,7 +703,7 @@ If email not found: {"email":"","emailFound":false,"capacity":null,"bedroomsFoun
       dataSource: parsed.dataSource || 'unknown'
     };
   } catch(e) {
-    console.warn('aiSearchVenue error for', venue.name, e.message);
+    console.warn('aiSearchVenue error:', venue.name, e.message);
     return { email: null, capacity: null, bedrooms: null };
   }
 }
