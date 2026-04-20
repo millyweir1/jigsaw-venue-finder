@@ -4,31 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jigsaw Venue Finder</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
-
   header { background: #1a3a5c; padding: 14px 24px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  header h1 { color: white; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  header h1 { color: white; font-size: 18px; font-weight: 600; }
   header span { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); font-size: 11px; padding: 2px 10px; border-radius: 10px; }
-
   .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
-
   .card { background: white; border-radius: 10px; border: 1px solid #e0e4ea; padding: 20px 24px; margin-bottom: 20px; }
   .card-title { font-size: 13px; font-weight: 600; color: #1a3a5c; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e8ecf0; }
-
   label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
   input, select { width: 100%; padding: 9px 12px; border: 1px solid #d1d9e0; border-radius: 6px; font-size: 14px; font-family: inherit; color: #1a1a2e; background: white; transition: border-color 0.15s; }
   input:focus, select:focus { outline: none; border-color: #1a3a5c; box-shadow: 0 0 0 3px rgba(26,58,92,0.08); }
-
-  .requirements-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
   .search-row { display: flex; gap: 10px; align-items: flex-end; }
   .search-row .loc-wrap { flex: 1; }
-  .search-row .radius-wrap { width: 140px; }
-
+  .search-row .rad-wrap { width: 140px; }
   .btn { padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: background 0.15s, transform 0.1s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .btn:active { transform: scale(0.98); }
   .btn-primary { background: #1a3a5c; color: white; }
@@ -39,22 +30,21 @@
   .btn-success { background: #0f6e56; color: white; }
   .btn-success:hover { background: #0a5442; }
   .btn-sm { padding: 6px 12px; font-size: 12px; }
-
-  #mapWrap { display: none; margin-top: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #d1d9e0; }
-  #map { height: 300px; width: 100%; }
-
+  #mapWrap { display: none; margin-top: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #d1d9e0; position: relative; }
+  #mapCanvas { width: 100%; height: 300px; display: block; background: #e8e0d8; }
+  .map-legend { display: flex; gap: 12px; padding: 8px 12px; background: #f8fafc; border-top: 1px solid #e8ecf0; font-size: 11px; color: #6b7280; flex-wrap: wrap; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; border: 1.5px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); vertical-align: middle; }
   #venueTypes { display: none; margin-top: 14px; }
-  .filter-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .filter-row { display: flex; gap: 14px; flex-wrap: wrap; }
   .filter-check { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; cursor: pointer; }
   .filter-check input[type=checkbox] { width: auto; accent-color: #1a3a5c; margin: 0; }
-
   .venue-list { display: flex; flex-direction: column; gap: 8px; }
   .venue-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid #e0e4ea; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
   .venue-item:hover { border-color: #1a3a5c; background: #f8fafc; }
   .venue-item.selected { border-color: #1a3a5c; background: #f0f4f8; }
   .venue-item input[type=checkbox] { margin-top: 2px; width: 16px; height: 16px; cursor: pointer; accent-color: #1a3a5c; flex-shrink: 0; }
   .venue-info { flex: 1; }
-  .venue-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+  .venue-name { font-size: 14px; font-weight: 600; }
   .venue-address { font-size: 12px; color: #6b7280; margin-top: 2px; }
   .venue-tags { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
@@ -62,10 +52,8 @@
   .tag-conference { background: #e1f5ee; color: #0f6e56; }
   .tag-distance { background: #f1efe8; color: #5f5e5a; }
   .tag-other { background: #faeeda; color: #854f0b; }
-
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
   .count-badge { background: #e6f1fb; color: #185fa5; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 10px; }
-
   .email-result { padding: 12px 14px; border: 1px solid #e0e4ea; border-radius: 8px; margin-bottom: 8px; }
   .email-result.found { border-color: #0f6e56; background: #f4fbf8; }
   .email-result.searching { border-color: #f0c040; background: #fffdf0; }
@@ -79,121 +67,75 @@
   .email-address { font-size: 13px; color: #185fa5; margin-top: 4px; font-family: monospace; }
   .google-link { font-size: 11px; color: #185fa5; text-decoration: none; margin-top: 4px; display: inline-block; }
   .google-link:hover { text-decoration: underline; }
-
   .copy-box { background: #f8fafc; border: 1px solid #d1d9e0; border-radius: 8px; padding: 14px 16px; font-family: monospace; font-size: 13px; color: #1a1a2e; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto; }
-
   .loading { display: flex; align-items: center; gap: 8px; color: #6b7280; font-size: 14px; padding: 20px 0; }
   .spinner { width: 18px; height: 18px; border: 2px solid #e0e4ea; border-top-color: #1a3a5c; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
   .empty { text-align: center; padding: 30px 20px; color: #9ca3af; font-size: 14px; }
-
   .api-key-notice { background: #fff8e6; border: 1px solid #f0c040; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #7a5900; margin-bottom: 16px; }
   .api-key-notice strong { display: block; margin-bottom: 4px; }
-
   .progress-bar { height: 4px; background: #e0e4ea; border-radius: 2px; overflow: hidden; margin: 10px 0; }
   .progress-fill { height: 100%; background: #1a3a5c; border-radius: 2px; transition: width 0.3s; }
-
   .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; }
   .alert-warn { background: #faeeda; color: #854f0b; border: 1px solid #fac775; }
-
-  .map-legend { display: flex; gap: 12px; padding: 8px 12px; background: #f8fafc; border-top: 1px solid #e8ecf0; font-size: 11px; color: #6b7280; flex-wrap: wrap; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; border: 1.5px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
-
-  @media (max-width: 640px) {
-    .requirements-grid { grid-template-columns: 1fr 1fr; }
-    .search-row { flex-wrap: wrap; }
-    .search-row .radius-wrap { width: 100%; }
-  }
-  @media (max-width: 400px) {
-    .requirements-grid { grid-template-columns: 1fr; }
-  }
+  @media (max-width: 640px) { .req-grid { grid-template-columns: 1fr 1fr; } .search-row { flex-wrap: wrap; } .search-row .rad-wrap { width: 100%; } }
+  @media (max-width: 400px) { .req-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-
 <header>
   <h1>Jigsaw Venue Finder</h1>
   <span>Jigsaw Conferences Ltd</span>
 </header>
-
 <div class="container">
 
-  <!-- REQUIREMENTS -->
   <div class="card">
     <div class="card-title">Event Requirements</div>
-    <div class="requirements-grid">
-      <div>
-        <label>Delegates</label>
-        <input type="number" id="delegates" placeholder="e.g. 80" min="1" />
-      </div>
-      <div>
-        <label>Bedrooms Required</label>
-        <input type="number" id="bedrooms" placeholder="e.g. 40" min="0" />
-      </div>
-      <div>
-        <label>Layout</label>
+    <div class="req-grid">
+      <div><label>Delegates</label><input type="number" id="delegates" placeholder="e.g. 80" min="1" /></div>
+      <div><label>Bedrooms Required</label><input type="number" id="bedrooms" placeholder="e.g. 40" min="0" /></div>
+      <div><label>Layout</label>
         <select id="layout">
           <option value="">Select layout...</option>
-          <option>Theatre</option>
-          <option>Cabaret</option>
-          <option>Boardroom</option>
-          <option>Classroom</option>
-          <option>U-Shape</option>
-          <option>Banquet</option>
-          <option>Reception</option>
-          <option>Dinner</option>
-          <option>Flexible / TBC</option>
+          <option>Theatre</option><option>Cabaret</option><option>Boardroom</option>
+          <option>Classroom</option><option>U-Shape</option><option>Banquet</option>
+          <option>Reception</option><option>Dinner</option><option>Flexible / TBC</option>
         </select>
       </div>
     </div>
   </div>
 
-  <!-- SEARCH -->
   <div class="card">
     <div class="card-title">Venue Search</div>
     <div class="search-row">
-      <div class="loc-wrap">
-        <label>Location</label>
-        <input type="text" id="location" placeholder="e.g. Winchester, Hampshire" />
-      </div>
-      <div class="radius-wrap">
-        <label>Search Radius</label>
-        <select id="radius" onchange="updateCircle()">
-          <option value="0.5">0.5 miles</option>
-          <option value="1" selected>1 mile</option>
-          <option value="2">2 miles</option>
-          <option value="3">3 miles</option>
-          <option value="5">5 miles</option>
-          <option value="10">10 miles</option>
-          <option value="15">15 miles</option>
-          <option value="20">20 miles</option>
-          <option value="30">30 miles</option>
-          <option value="50">50 miles</option>
+      <div class="loc-wrap"><label>Location</label><input type="text" id="location" placeholder="e.g. Winchester, Hampshire" /></div>
+      <div class="rad-wrap"><label>Search Radius</label>
+        <select id="radius" onchange="redrawMap()">
+          <option value="0.5">0.5 miles</option><option value="1" selected>1 mile</option>
+          <option value="2">2 miles</option><option value="3">3 miles</option>
+          <option value="5">5 miles</option><option value="10">10 miles</option>
+          <option value="15">15 miles</option><option value="20">20 miles</option>
+          <option value="30">30 miles</option><option value="50">50 miles</option>
         </select>
       </div>
-      <div style="padding-top: 18px;">
+      <div style="padding-top:18px;">
         <button class="btn btn-primary" onclick="searchVenues()" id="searchBtn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           Search Venues
         </button>
       </div>
     </div>
-
-    <!-- MAP -->
     <div id="mapWrap">
-      <div id="map"></div>
+      <canvas id="mapCanvas"></canvas>
       <div class="map-legend">
         <span><span class="legend-dot" style="background:#1a3a5c;"></span>Search centre</span>
         <span><span class="legend-dot" style="background:#185fa5;"></span>Hotel</span>
-        <span><span class="legend-dot" style="background:#0f6e56;"></span>Conference centre</span>
+        <span><span class="legend-dot" style="background:#0f6e56;"></span>Conference</span>
         <span><span class="legend-dot" style="background:#854f0b;"></span>Other venue</span>
       </div>
     </div>
-
-    <!-- TYPE FILTERS -->
     <div id="venueTypes">
-      <label style="margin-bottom: 8px; display:block;">Filter by type</label>
+      <label style="margin-bottom:8px;display:block;">Filter by type</label>
       <div class="filter-row">
         <label class="filter-check"><input type="checkbox" checked id="filterHotel" onchange="filterVenues()"> Hotels</label>
         <label class="filter-check"><input type="checkbox" checked id="filterConference" onchange="filterVenues()"> Conference Centres</label>
@@ -202,17 +144,16 @@
     </div>
   </div>
 
-  <!-- RESULTS -->
   <div class="card" id="resultsCard" style="display:none;">
     <div class="card-title">Search Results</div>
     <div class="toolbar">
       <span class="count-badge" id="resultCount">0 venues found</span>
       <button class="btn btn-secondary btn-sm" onclick="selectAll()">Select all</button>
       <button class="btn btn-secondary btn-sm" onclick="selectNone()">Deselect all</button>
-      <span style="margin-left:auto; font-size:12px; color:#6b7280;" id="selectedCount">0 selected</span>
+      <span style="margin-left:auto;font-size:12px;color:#6b7280;" id="selectedCount">0 selected</span>
     </div>
     <div id="venueList" class="venue-list"></div>
-    <div style="margin-top:16px; padding-top:16px; border-top:1px solid #e8ecf0;">
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8ecf0;">
       <button class="btn btn-success" onclick="goToEmails()" id="findEmailsBtn" disabled>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
         Find Emails for Selected Venues
@@ -220,20 +161,17 @@
     </div>
   </div>
 
-  <!-- EMAIL FINDER -->
   <div class="card" id="emailCard" style="display:none;">
     <div class="card-title">Email Finder</div>
-
     <div class="api-key-notice" id="apiKeyNotice">
       <strong>Anthropic API Key — enables AI email search</strong>
-      Paste your key below. Stored in this browser session only, never sent anywhere except directly to Anthropic.
+      Paste your key below. Stored in this browser session only.
     </div>
-    <div style="display:flex; gap:8px; margin-bottom:16px;">
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
       <input type="password" id="apiKey" placeholder="sk-ant-api03-..." style="flex:1;" />
       <button class="btn btn-secondary" onclick="saveKey()">Save Key</button>
     </div>
-
-    <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="findAllEmails()" id="findAllBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         AI Search All Selected
@@ -243,90 +181,295 @@
         Collect All Found Emails
       </button>
     </div>
-
     <div id="progressWrap" style="display:none;">
       <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-      <div style="font-size:12px; color:#6b7280; margin-top:4px;" id="progressText">Searching...</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:4px;" id="progressText">Searching...</div>
     </div>
-
     <div id="emailResults"></div>
-
-    <div id="copySection" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid #e8ecf0;">
-      <label style="margin-bottom:8px;">All found emails — paste directly into Outlook To: field</label>
+    <div id="copySection" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid #e8ecf0;">
+      <label style="margin-bottom:8px;">All found emails — paste into Outlook To: field</label>
       <div class="copy-box" id="emailCopyBox"></div>
-      <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
         <button class="btn btn-primary btn-sm" onclick="copyToClipboard()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           Copy to Clipboard
         </button>
-        <span id="copiedMsg" style="font-size:12px; color:#0f6e56; display:none;">Copied!</span>
+        <span id="copiedMsg" style="font-size:12px;color:#0f6e56;display:none;">Copied!</span>
       </div>
     </div>
   </div>
 
 </div>
-
 <script>
-let allVenues = [];
-let selectedVenues = new Set();
-let emailResults = {};
-let apiKeyStored = '';
-let map = null;
-let searchCircle = null;
-let searchMarker = null;
-let venueMarkers = [];
+// ── State ──────────────────────────────────────────────
+let allVenues = [], selectedVenues = new Set(), emailResults = {}, apiKeyStored = '';
 let currentGeo = null;
 
-function drawMapOverlays(lat, lon) {
+// ── Canvas Map ─────────────────────────────────────────
+// Pure canvas tile map — no external library, no CSP issues
+const TILE_SIZE = 256;
+
+function lon2tile(lon, zoom) { return Math.floor((lon + 180) / 360 * Math.pow(2, zoom)); }
+function lat2tile(lat, zoom) { return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom)); }
+function tile2lon(x, zoom) { return x / Math.pow(2, zoom) * 360 - 180; }
+function tile2lat(y, zoom) { const n = Math.PI - 2 * Math.PI * y / Math.pow(2, zoom); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+
+function latLonToCanvas(lat, lon, topLeftLat, topLeftLon, zoom, canvas) {
+  const totalTiles = Math.pow(2, zoom);
+  const x = (lon - topLeftLon) / 360 * totalTiles * TILE_SIZE;
+  const topY = (1 - Math.log(Math.tan(topLeftLat * Math.PI / 180) + 1 / Math.cos(topLeftLat * Math.PI / 180)) / Math.PI) / 2 * totalTiles * TILE_SIZE;
+  const curY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * totalTiles * TILE_SIZE;
+  return { x, y: curY - topY };
+}
+
+function milesToDegLat(miles) { return miles / 69.0; }
+function milesToDegLon(miles, lat) { return miles / (69.0 * Math.cos(lat * Math.PI / 180)); }
+
+function drawMap(geo, radiusMiles, venues) {
+  const canvas = document.getElementById('mapCanvas');
+  const wrap = document.getElementById('mapWrap');
+  wrap.style.display = 'block';
+  const W = wrap.clientWidth || 700;
+  canvas.width = W;
+  canvas.height = 300;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#e8e0d8';
+  ctx.fillRect(0, 0, W, 300);
+
+  // Pick zoom level based on radius
+  const radiusKm = radiusMiles * 1.609;
+  let zoom = 13;
+  if (radiusMiles >= 30) zoom = 9;
+  else if (radiusMiles >= 15) zoom = 10;
+  else if (radiusMiles >= 10) zoom = 11;
+  else if (radiusMiles >= 5) zoom = 12;
+  else if (radiusMiles >= 2) zoom = 13;
+  else zoom = 14;
+
+  const tileX = lon2tile(geo.lon, zoom);
+  const tileY = lat2tile(geo.lat, zoom);
+
+  // How many tiles we need
+  const tilesX = Math.ceil(W / TILE_SIZE) + 2;
+  const tilesY = Math.ceil(300 / TILE_SIZE) + 2;
+  const startX = tileX - Math.floor(tilesX / 2);
+  const startY = tileY - Math.floor(tilesY / 2);
+  const topLeftLat = tile2lat(startY, zoom);
+  const topLeftLon = tile2lon(startX, zoom);
+  const offsetX = (tileX - startX) * TILE_SIZE - W / 2;
+  const offsetY = (tileY - startY) * TILE_SIZE - 150;
+
+  let tilesLoaded = 0;
+  const totalTiles = tilesX * tilesY;
+
+  function tryDraw() {
+    tilesLoaded++;
+    if (tilesLoaded >= totalTiles) renderOverlays();
+  }
+
+  // Draw tiles
+  for (let dy = 0; dy < tilesY; dy++) {
+    for (let dx = 0; dx < tilesX; dx++) {
+      const tx = startX + dx, ty = startY + dy;
+      const px = dx * TILE_SIZE - offsetX;
+      const py = dy * TILE_SIZE - offsetY;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { ctx.drawImage(img, px, py, TILE_SIZE, TILE_SIZE); tryDraw(); };
+      img.onerror = () => tryDraw();
+      const sub = ['a','b','c'][Math.abs(tx+ty) % 3];
+      img.src = `https://${sub}.tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
+    }
+  }
+
+  function renderOverlays() {
+    // Convert geo to canvas coords
+    function toCanvas(lat, lon) {
+      const pos = latLonToCanvas(lat, lon, topLeftLat, topLeftLon, zoom, canvas);
+      return { x: pos.x - offsetX, y: pos.y - offsetY };
+    }
+
+    const centre = toCanvas(geo.lat, geo.lon);
+
+    // Draw radius circle (approximate in pixels)
+    const edgeLat = geo.lat + milesToDegLat(radiusMiles);
+    const edgePos = toCanvas(edgeLat, geo.lon);
+    const radiusPx = Math.abs(centre.y - edgePos.y);
+
+    ctx.beginPath();
+    ctx.arc(centre.x, centre.y, radiusPx, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(26, 58, 92, 0.08)';
+    ctx.fill();
+    ctx.strokeStyle = '#1a3a5c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw venue dots
+    for (const v of venues) {
+      if (!v.lat || !v.lon) continue;
+      const pos = toCanvas(v.lat, v.lon);
+      const color = v.type === 'hotel' ? '#185fa5' : v.type === 'conference' ? '#0f6e56' : '#854f0b';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Draw centre pin
+    ctx.beginPath();
+    ctx.arc(centre.x, centre.y, 8, 0, 2 * Math.PI);
+    ctx.fillStyle = '#1a3a5c';
+    ctx.fill();
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Attribution
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillRect(W - 130, 283, 130, 17);
+    ctx.fillStyle = '#555';
+    ctx.font = '9px sans-serif';
+    ctx.fillText('© OpenStreetMap contributors', W - 128, 294);
+  }
+
+  // Fallback if tiles take too long
+  setTimeout(renderOverlays, 3000);
+}
+
+function redrawMap() {
+  if (currentGeo) drawMap(currentGeo, parseFloat(document.getElementById('radius').value), allVenues);
+}
+
+// ── Geocode ────────────────────────────────────────────
+async function geocode(location) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1&countrycodes=gb`;
+  const resp = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'JigsawVenueFinder/1.0' } });
+  const data = await resp.json();
+  if (!data.length) throw new Error('Location not found. Try something like "Winchester, Hampshire".');
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+}
+
+function milesToMeters(m) { return m * 1609.34; }
+
+async function overpassSearch(lat, lon, radiusM) {
+  const q = `[out:json][timeout:30];(node["tourism"="hotel"](around:${radiusM},${lat},${lon});way["tourism"="hotel"](around:${radiusM},${lat},${lon});node["leisure"="conference_centre"](around:${radiusM},${lat},${lon});way["leisure"="conference_centre"](around:${radiusM},${lat},${lon});node["amenity"="conference_centre"](around:${radiusM},${lat},${lon});way["amenity"="conference_centre"](around:${radiusM},${lat},${lon});node["amenity"="events_venue"](around:${radiusM},${lat},${lon});way["amenity"="events_venue"](around:${radiusM},${lat},${lon});node["building"="hotel"](around:${radiusM},${lat},${lon});way["building"="hotel"](around:${radiusM},${lat},${lon}););out center tags;`;
+  const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q) });
+  const data = await resp.json();
+  return data.elements || [];
+}
+
+function getType(tags) {
+  if (tags.tourism === 'hotel' || tags.building === 'hotel') return 'hotel';
+  if (tags.leisure === 'conference_centre' || tags.amenity === 'conference_centre' || tags.amenity === 'events_venue') return 'conference';
+  return 'other';
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 3958.8, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── Main Search ────────────────────────────────────────
+async function searchVenues() {
+  const location = document.getElementById('location').value.trim();
+  const radius = parseFloat(document.getElementById('radius').value);
+  if (!location) { alert('Please enter a location.'); return; }
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:white;width:14px;height:14px;border-width:2px;"></div> Searching...';
+  const list = document.getElementById('venueList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div> Locating ' + location + '...</div>';
+  document.getElementById('resultsCard').style.display = 'block';
+  document.getElementById('emailCard').style.display = 'none';
+  document.getElementById('venueTypes').style.display = 'none';
   try {
-    if (searchCircle) { map.removeLayer(searchCircle); searchCircle = null; }
-    if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
-    venueMarkers.forEach(m => { try { map.removeLayer(m); } catch(e){} });
-    venueMarkers = [];
-    const radiusMiles = parseFloat(document.getElementById("radius").value);
-    const radiusM = radiusMiles * 1609.34;
-    searchCircle = L.circle([lat, lon], { radius: radiusM, color: "#1a3a5c", weight: 2, fillColor: "#1a3a5c", fillOpacity: 0.07, dashArray: "6 4" }).addTo(map);
-    const pinIcon = L.divIcon({ className: "", html: "<div style="width:16px;height:16px;background:#1a3a5c;border-radius:50%;border:2.5px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.35);"></div>", iconSize: [16,16], iconAnchor: [8,8] });
-    searchMarker = L.marker([lat, lon], { icon: pinIcon }).addTo(map);
-    searchMarker.bindPopup("<strong>" + document.getElementById("location").value + "</strong><br>Within " + radiusMiles + " mile" + (radiusMiles !== 1 ? "s" : ""));
-    map.fitBounds(searchCircle.getBounds(), { padding: [24, 24] });
-  } catch(e) { console.warn("Map overlay error:", e); }
-}
-
-function initMap(lat, lon) {
-  document.getElementById("mapWrap").style.display = "block";
-  if (!map) {
-    map = L.map("map", { zoomControl: true, scrollWheelZoom: false, preferCanvas: true });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 18 }).addTo(map);
-    map.setView([lat, lon], 13);
-    setTimeout(function() { map.invalidateSize(); drawMapOverlays(lat, lon); }, 400);
-  } else {
-    map.invalidateSize();
-    drawMapOverlays(lat, lon);
+    const geo = await geocode(location);
+    currentGeo = geo;
+    list.innerHTML = '<div class="loading"><div class="spinner"></div> Finding venues within ' + radius + ' mile' + (radius!==1?'s':'') + '...</div>';
+    const radiusM = milesToMeters(radius);
+    const elements = await overpassSearch(geo.lat, geo.lon, radiusM);
+    allVenues = [];
+    const seen = new Set();
+    for (const el of elements) {
+      const tags = el.tags || {};
+      const name = tags.name;
+      if (!name) continue;
+      const key = name.toLowerCase().replace(/\s/g,'');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const lat = el.lat || (el.center && el.center.lat);
+      const lon = el.lon || (el.center && el.center.lon);
+      const dist = lat ? haversine(geo.lat, geo.lon, lat, lon) : null;
+      const addr = [tags['addr:housenumber'],tags['addr:street'],tags['addr:city']||tags['addr:town']].filter(Boolean).join(', ') || tags['addr:full'] || '';
+      allVenues.push({ id: el.id, name, address: addr, type: getType(tags), distance: dist, lat, lon, phone: tags.phone||tags['contact:phone']||'', email: tags.email||tags['contact:email']||'' });
+    }
+    allVenues.sort((a,b) => (a.distance||999)-(b.distance||999));
+    selectedVenues.clear();
+    drawMap(geo, radius, allVenues);
+    document.getElementById('venueTypes').style.display = allVenues.length ? 'block' : 'none';
+    renderVenues();
+    document.getElementById('resultCount').textContent = allVenues.length + ' venue' + (allVenues.length!==1?'s':'') + ' found';
+    if (!allVenues.length) list.innerHTML = '<div class="empty">No venues found within ' + radius + ' mile' + (radius!==1?'s':'') + ' of ' + location + '. Try a larger radius.</div>';
+  } catch(e) {
+    list.innerHTML = '<div class="alert alert-warn">' + (e.message || 'Search failed. Please try again.') + '</div>';
   }
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search Venues';
 }
 
-function updateCircle() {
-  if (!map || !currentGeo) return;
-  initMap(currentGeo.lat, currentGeo.lon);
-  addVenueMarkers();
-}
+function filterVenues() { renderVenues(); }
 
-function addVenueMarkers() {
-  venueMarkers.forEach(m => map.removeLayer(m));
-  venueMarkers = [];
+function renderVenues() {
+  const showH = document.getElementById('filterHotel').checked;
+  const showC = document.getElementById('filterConference').checked;
+  const showO = document.getElementById('filterOther').checked;
+  const list = document.getElementById('venueList');
+  list.innerHTML = '';
+  let shown = 0;
   for (const v of allVenues) {
-    if (!v.lat || !v.lon) continue;
-    const color = v.type === 'hotel' ? '#185fa5' : v.type === 'conference' ? '#0f6e56' : '#854f0b';
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:11px;height:11px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [11, 11], iconAnchor: [5.5, 5.5]
-    });
-    const marker = L.marker([v.lat, v.lon], { icon }).addTo(map);
-    marker.bindPopup(`<strong style="font-size:13px;">${v.name}</strong>${v.address ? '<br><span style="font-size:11px;color:#666;">'+v.address+'</span>' : ''}${v.distance ? '<br><span style="font-size:11px;color:#888;">'+v.distance.toFixed(2)+' mi away</span>' : ''}`);
-    venueMarkers.push(marker);
+    if (v.type==='hotel'&&!showH) continue;
+    if (v.type==='conference'&&!showC) continue;
+    if (v.type==='other'&&!showO) continue;
+    shown++;
+    const div = document.createElement('div');
+    div.className = 'venue-item' + (selectedVenues.has(v.id)?' selected':'');
+    div.onclick = () => toggleVenue(v.id, div);
+    const distTag = v.distance ? `<span class="tag tag-distance">${v.distance.toFixed(2)} mi</span>` : '';
+    const typeLabel = v.type==='hotel'?'Hotel':v.type==='conference'?'Conference':'Venue';
+    const typeClass = v.type==='hotel'?'tag-hotel':v.type==='conference'?'tag-conference':'tag-other';
+    div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id)?'checked':''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address?`<div class="venue-address">${v.address}</div>`:''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}${v.phone?`<span class="tag tag-distance">${v.phone}</span>`:''}</div></div>`;
+    list.appendChild(div);
   }
+  if (!shown && allVenues.length) list.innerHTML = '<div class="empty">No venues match the current filters.</div>';
+  updateCount();
+}
+
+function toggleVenue(id, el) {
+  if (selectedVenues.has(id)) { selectedVenues.delete(id); el.classList.remove('selected'); }
+  else { selectedVenues.add(id); el.classList.add('selected'); }
+  el.querySelector('input[type=checkbox]').checked = selectedVenues.has(id);
+  updateCount();
+}
+
+function updateCount() {
+  const n = selectedVenues.size;
+  document.getElementById('selectedCount').textContent = n + ' selected';
+  document.getElementById('findEmailsBtn').disabled = n === 0;
+}
+
+function selectAll() { allVenues.forEach(v=>selectedVenues.add(v.id)); document.querySelectorAll('.venue-item').forEach(el=>{el.classList.add('selected');el.querySelector('input[type=checkbox]').checked=true;}); updateCount(); }
+function selectNone() { selectedVenues.clear(); document.querySelectorAll('.venue-item').forEach(el=>{el.classList.remove('selected');el.querySelector('input[type=checkbox]').checked=false;}); updateCount(); }
+
+function goToEmails() {
+  document.getElementById('emailCard').style.display = 'block';
+  document.getElementById('emailCard').scrollIntoView({ behavior:'smooth', block:'start' });
+  renderEmailSlots();
 }
 
 function saveKey() {
@@ -338,163 +481,19 @@ function saveKey() {
   }
 }
 
-async function geocode(location) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1&countrycodes=gb`;
-  const resp = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'JigsawVenueFinder/1.0' } });
-  const data = await resp.json();
-  if (!data.length) throw new Error('Location not found. Try a more specific place, e.g. "Winchester, Hampshire".');
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
-}
-
-function milesToMeters(miles) { return miles * 1609.34; }
-
-async function overpassSearch(lat, lon, radiusM) {
-  const query = `[out:json][timeout:30];(node["tourism"="hotel"](around:${radiusM},${lat},${lon});way["tourism"="hotel"](around:${radiusM},${lat},${lon});node["leisure"="conference_centre"](around:${radiusM},${lat},${lon});way["leisure"="conference_centre"](around:${radiusM},${lat},${lon});node["amenity"="conference_centre"](around:${radiusM},${lat},${lon});way["amenity"="conference_centre"](around:${radiusM},${lat},${lon});node["amenity"="events_venue"](around:${radiusM},${lat},${lon});way["amenity"="events_venue"](around:${radiusM},${lat},${lon});node["building"="hotel"](around:${radiusM},${lat},${lon});way["building"="hotel"](around:${radiusM},${lat},${lon});node["tourism"="guest_house"]["rooms"](around:${radiusM},${lat},${lon}););out center tags;`;
-  const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(query) });
-  const data = await resp.json();
-  return data.elements || [];
-}
-
-function getVenueType(tags) {
-  if (tags.tourism === 'hotel' || tags.building === 'hotel') return 'hotel';
-  if (tags.leisure === 'conference_centre' || tags.amenity === 'conference_centre' || tags.amenity === 'events_venue') return 'conference';
-  return 'other';
-}
-
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 3958.8, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-async function searchVenues() {
-  const location = document.getElementById('location').value.trim();
-  const radius = parseFloat(document.getElementById('radius').value);
-  if (!location) { alert('Please enter a location.'); return; }
-
-  const btn = document.getElementById('searchBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="border-top-color:white;width:14px;height:14px;border-width:2px;"></div> Searching...';
-
-  const list = document.getElementById('venueList');
-  list.innerHTML = '<div class="loading"><div class="spinner"></div> Locating ' + location + '...</div>';
-  document.getElementById('resultsCard').style.display = 'block';
-  document.getElementById('emailCard').style.display = 'none';
-  document.getElementById('venueTypes').style.display = 'none';
-
-  try {
-    const geo = await geocode(location);
-    currentGeo = geo;
-    initMap(geo.lat, geo.lon);
-
-    list.innerHTML = '<div class="loading"><div class="spinner"></div> Finding venues within ' + radius + ' mile' + (radius !== 1 ? 's' : '') + '...</div>';
-
-    const radiusM = milesToMeters(radius);
-    const elements = await overpassSearch(geo.lat, geo.lon, radiusM);
-
-    allVenues = [];
-    const seen = new Set();
-    for (const el of elements) {
-      const tags = el.tags || {};
-      const name = tags.name;
-      if (!name) continue;
-      const key = name.toLowerCase().replace(/\s/g, '');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const lat = el.lat || (el.center && el.center.lat);
-      const lon = el.lon || (el.center && el.center.lon);
-      const dist = lat ? haversineDistance(geo.lat, geo.lon, lat, lon) : null;
-      const addr = [tags['addr:housenumber'], tags['addr:street'], tags['addr:city'] || tags['addr:town']].filter(Boolean).join(', ') || tags['addr:full'] || '';
-      allVenues.push({ id: el.id, name, address: addr, type: getVenueType(tags), distance: dist, lat, lon, phone: tags.phone || tags['contact:phone'] || '', email: tags.email || tags['contact:email'] || '' });
-    }
-    allVenues.sort((a, b) => (a.distance || 999) - (b.distance || 999));
-    selectedVenues.clear();
-    addVenueMarkers();
-    document.getElementById('venueTypes').style.display = allVenues.length ? 'block' : 'none';
-    renderVenues();
-    document.getElementById('resultCount').textContent = allVenues.length + ' venue' + (allVenues.length !== 1 ? 's' : '') + ' found';
-    if (allVenues.length === 0) {
-      list.innerHTML = '<div class="empty">No venues found within ' + radius + ' mile' + (radius !== 1 ? 's' : '') + ' of ' + location + '. Try a larger radius.</div>';
-    }
-  } catch (e) {
-    list.innerHTML = '<div class="alert alert-warn">' + (e.message || 'Search failed. Please try again.') + '</div>';
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search Venues';
-}
-
-function filterVenues() { renderVenues(); }
-
-function renderVenues() {
-  const showHotel = document.getElementById('filterHotel').checked;
-  const showConf = document.getElementById('filterConference').checked;
-  const showOther = document.getElementById('filterOther').checked;
-  const list = document.getElementById('venueList');
-  list.innerHTML = '';
-  let shown = 0;
-  for (const v of allVenues) {
-    if (v.type === 'hotel' && !showHotel) continue;
-    if (v.type === 'conference' && !showConf) continue;
-    if (v.type === 'other' && !showOther) continue;
-    shown++;
-    const div = document.createElement('div');
-    div.className = 'venue-item' + (selectedVenues.has(v.id) ? ' selected' : '');
-    div.onclick = () => toggleVenue(v.id, div);
-    const distTag = v.distance ? `<span class="tag tag-distance">${v.distance.toFixed(2)} mi</span>` : '';
-    const typeLabel = v.type === 'hotel' ? 'Hotel' : v.type === 'conference' ? 'Conference' : 'Venue';
-    const typeClass = v.type === 'hotel' ? 'tag-hotel' : v.type === 'conference' ? 'tag-conference' : 'tag-other';
-    div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address ? `<div class="venue-address">${v.address}</div>` : ''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}${v.phone ? `<span class="tag tag-distance">${v.phone}</span>` : ''}</div></div>`;
-    list.appendChild(div);
-  }
-  if (shown === 0 && allVenues.length > 0) list.innerHTML = '<div class="empty">No venues match the current filters.</div>';
-  updateSelectedCount();
-}
-
-function toggleVenue(id, el) {
-  if (selectedVenues.has(id)) { selectedVenues.delete(id); el.classList.remove('selected'); }
-  else { selectedVenues.add(id); el.classList.add('selected'); }
-  el.querySelector('input[type=checkbox]').checked = selectedVenues.has(id);
-  updateSelectedCount();
-}
-
-function updateSelectedCount() {
-  const n = selectedVenues.size;
-  document.getElementById('selectedCount').textContent = n + ' selected';
-  document.getElementById('findEmailsBtn').disabled = n === 0;
-}
-
-function selectAll() {
-  allVenues.forEach(v => selectedVenues.add(v.id));
-  document.querySelectorAll('.venue-item').forEach(el => { el.classList.add('selected'); el.querySelector('input[type=checkbox]').checked = true; });
-  updateSelectedCount();
-}
-
-function selectNone() {
-  selectedVenues.clear();
-  document.querySelectorAll('.venue-item').forEach(el => { el.classList.remove('selected'); el.querySelector('input[type=checkbox]').checked = false; });
-  updateSelectedCount();
-}
-
-function goToEmails() {
-  document.getElementById('emailCard').style.display = 'block';
-  document.getElementById('emailCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  renderEmailSlots();
-}
-
 function renderEmailSlots() {
   const container = document.getElementById('emailResults');
   container.innerHTML = '';
   emailResults = {};
-  const venues = allVenues.filter(v => selectedVenues.has(v.id));
   const location = document.getElementById('location').value.trim();
+  const venues = allVenues.filter(v => selectedVenues.has(v.id));
   for (const v of venues) {
-    emailResults[v.id] = { status: 'pending', email: v.email || '', venue: v };
+    emailResults[v.id] = { status:'pending', email:v.email||'', venue:v };
     const div = document.createElement('div');
     div.className = 'email-result';
     div.id = 'er-' + v.id;
-    const googleQuery = encodeURIComponent(`"${v.name}" ${location} events email address`);
-    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email || ''}</div><a href="https://www.google.com/search?q=${googleQuery}" target="_blank" class="google-link">&#128269; Google: "${v.name}" ${location} events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
+    const gq = encodeURIComponent(`"${v.name}" ${location} events email address`);
+    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email||''}</div><a href="https://www.google.com/search?q=${gq}" target="_blank" class="google-link">&#128269; Google: "${v.name}" ${location} events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
     container.appendChild(div);
     if (v.email) updateEmailResult(v.id, v.email, 'found');
   }
@@ -503,21 +502,18 @@ function renderEmailSlots() {
 
 function updateEmailResult(id, email, status) {
   emailResults[id] = { ...emailResults[id], status, email };
-  const div = document.getElementById('er-' + id);
-  const badge = document.getElementById('badge-' + id);
-  const val = document.getElementById('email-val-' + id);
+  const div = document.getElementById('er-'+id);
+  const badge = document.getElementById('badge-'+id);
+  const val = document.getElementById('email-val-'+id);
   if (!div) return;
-  div.className = 'email-result ' + (status === 'found' ? 'found' : status === 'searching' ? 'searching' : 'not-found');
-  badge.className = 'status-badge ' + (status === 'found' ? 'badge-found' : status === 'searching' ? 'badge-searching' : 'badge-notfound');
-  badge.textContent = status === 'found' ? 'Found' : status === 'searching' ? 'Searching...' : 'Not found';
-  val.textContent = email || '';
-  if (email && document.getElementById('manual-' + id)) document.getElementById('manual-' + id).value = email;
+  div.className = 'email-result '+(status==='found'?'found':status==='searching'?'searching':'not-found');
+  badge.className = 'status-badge '+(status==='found'?'badge-found':status==='searching'?'badge-searching':'badge-notfound');
+  badge.textContent = status==='found'?'Found':status==='searching'?'Searching...':'Not found';
+  val.textContent = email||'';
+  if (email && document.getElementById('manual-'+id)) document.getElementById('manual-'+id).value = email;
 }
 
-function saveManualEmail(id) {
-  const val = document.getElementById('manual-' + id).value.trim();
-  if (val) updateEmailResult(id, val, 'found');
-}
+function saveManualEmail(id) { const v = document.getElementById('manual-'+id).value.trim(); if (v) updateEmailResult(id, v, 'found'); }
 
 async function aiSearchEmail(venue) {
   if (!apiKeyStored) return null;
@@ -525,65 +521,59 @@ async function aiSearchEmail(venue) {
   const prompt = `Find the events or conference enquiry email address for "${venue.name}" venue in ${location}, UK. Return ONLY a JSON object: {"email":"events@venue.com","found":true} or {"email":"","found":false}. No other text or markdown.`;
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKeyStored, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 200, tools: [{ type: 'web_search_20250305', name: 'web_search' }], messages: [{ role: 'user', content: prompt }] })
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKeyStored,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})
     });
     const data = await resp.json();
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
     return parsed.found ? parsed.email : null;
-  } catch (e) { return null; }
+  } catch(e) { return null; }
 }
 
 async function findAllEmails() {
-  const venues = allVenues.filter(v => selectedVenues.has(v.id));
+  const venues = allVenues.filter(v=>selectedVenues.has(v.id));
   if (!venues.length) return;
   const btn = document.getElementById('findAllBtn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="border-top-color:white;width:14px;height:14px;border-width:2px;"></div> Searching...';
   document.getElementById('progressWrap').style.display = 'block';
-
-  for (let i = 0; i < venues.length; i++) {
+  for (let i=0; i<venues.length; i++) {
     const v = venues[i];
-    document.getElementById('progressFill').style.width = ((i / venues.length) * 100) + '%';
-    document.getElementById('progressText').textContent = `Searching ${i + 1} of ${venues.length}: ${v.name}`;
-    updateEmailResult(v.id, '', 'searching');
-    if (v.email) { updateEmailResult(v.id, v.email, 'found'); continue; }
-    if (apiKeyStored) {
-      const found = await aiSearchEmail(v);
-      updateEmailResult(v.id, found || '', found ? 'found' : 'not-found');
-    } else {
-      updateEmailResult(v.id, '', 'not-found');
-    }
-    await new Promise(r => setTimeout(r, 400));
+    document.getElementById('progressFill').style.width = ((i/venues.length)*100)+'%';
+    document.getElementById('progressText').textContent = `Searching ${i+1} of ${venues.length}: ${v.name}`;
+    updateEmailResult(v.id,'','searching');
+    if (v.email) { updateEmailResult(v.id,v.email,'found'); continue; }
+    if (apiKeyStored) { const found = await aiSearchEmail(v); updateEmailResult(v.id,found||'',found?'found':'not-found'); }
+    else updateEmailResult(v.id,'','not-found');
+    await new Promise(r=>setTimeout(r,400));
   }
-
-  document.getElementById('progressFill').style.width = '100%';
-  document.getElementById('progressText').textContent = 'Search complete.';
-  setTimeout(() => { document.getElementById('progressWrap').style.display = 'none'; }, 2000);
-  btn.disabled = false;
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> AI Search All Selected';
+  document.getElementById('progressFill').style.width='100%';
+  document.getElementById('progressText').textContent='Search complete.';
+  setTimeout(()=>{document.getElementById('progressWrap').style.display='none';},2000);
+  btn.disabled=false;
+  btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> AI Search All Selected';
   buildCopySection();
 }
 
 function buildCopySection() {
-  const found = Object.values(emailResults).filter(r => r.status === 'found' && r.email);
+  const found = Object.values(emailResults).filter(r=>r.status==='found'&&r.email);
   if (!found.length) return;
-  document.getElementById('copySection').style.display = 'block';
-  document.getElementById('emailCopyBox').textContent = found.map(r => r.email).join('; ');
-  document.getElementById('copySection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('copySection').style.display='block';
+  document.getElementById('emailCopyBox').textContent=found.map(r=>r.email).join('; ');
+  document.getElementById('copySection').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 function copyToClipboard() {
-  navigator.clipboard.writeText(document.getElementById('emailCopyBox').textContent).then(() => {
+  navigator.clipboard.writeText(document.getElementById('emailCopyBox').textContent).then(()=>{
     const msg = document.getElementById('copiedMsg');
-    msg.style.display = 'inline';
-    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+    msg.style.display='inline';
+    setTimeout(()=>{msg.style.display='none';},2500);
   });
 }
 
-document.getElementById('location').addEventListener('keydown', e => { if (e.key === 'Enter') searchVenues(); });
+document.getElementById('location').addEventListener('keydown', e => { if (e.key==='Enter') searchVenues(); });
 </script>
 </body>
 </html>
