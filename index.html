@@ -567,26 +567,55 @@ function saveManualEmail(id) { const v = document.getElementById('manual-'+id).v
 async function aiSearchEmail(venue) {
   if (!apiKeyStored) return null;
   const location = document.getElementById('location').value.trim();
-  const prompt = `Search the web for the email address for "${venue.name}" in ${location}, UK.
 
-Search for: "${venue.name}" ${location} events email
-Also try: "${venue.name}" ${location} conference enquiries contact email
+  const messages = [
+    {
+      role: 'user',
+      content: `I need the events or conference enquiry email address for "${venue.name}" in ${location}, UK.
 
-Look at the venue's own website, their contact page, and any booking/events enquiry page. Accept any events, conferences, sales, or general enquiry email address.
+Search in this order — stop as soon as you find an email:
 
-Return ONLY valid JSON with no extra text: {"email":"found@email.com","found":true}
-If genuinely no email exists anywhere online after searching, return: {"email":"","found":false}
-Do not give up easily — check the website contact page directly if needed.`;
+Step 1: Search for: site:venuedirectory.com "${venue.name}" ${location}
+- Visit the Venue Directory listing if found and get the email from there.
+
+Step 2: Search for: "${venue.name}" ${location} events email address
+- Look carefully at all search results for any email address.
+
+Step 3: Visit the venue's own website contact or meetings/events page directly and look for an email.
+
+Step 4: Search for: "${venue.name}" ${location} conference enquiries contact email
+
+Rules:
+- Accept ANY email — events@, conferences@, meetings@, info@, reservations@, sales@, enquiries@ etc
+- Do not give up after one search — work through all steps before returning not found
+- If you find an email address ANYWHERE, return it
+
+Return ONLY this exact JSON format, no other text whatsoever:
+{"email":"found@example.com","found":true}
+Or if truly nothing found after all steps:
+{"email":"","found":false}`
+    }
+  ];
+
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':apiKeyStored,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKeyStored,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: messages
+      })
     });
     const data = await resp.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    const clean = text.replace(/```json|```/g,'').trim();
-    const jsonMatch = clean.match(/\{[^}]+\}/);
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    const jsonMatch = text.match(/\{"email"[\s\S]*?"found"\s*:\s*(true|false)\s*\}/);
     if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]);
     return parsed.found ? parsed.email : null;
