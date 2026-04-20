@@ -643,28 +643,34 @@ async function aiSearchVenue(venue) {
   const reqDelegates = parseInt(document.getElementById('delegates').value) || 0;
   const reqBedrooms = parseInt(document.getElementById('bedrooms').value) || 0;
 
-  const prompt = `Find information about the venue "${venue.name}" in ${location}, UK.
+  const prompt = `You must find the events email address, max capacity, and bedroom count for "${venue.name}" in ${location}, UK.
 
-I need: 1) Their events/conference enquiry email address, 2) Their maximum delegate/meeting capacity, 3) Number of bedrooms/hotel rooms.
+STEP 1 — Search Venue Directory:
+Search for: ${venue.name} ${location} venuedirectory.com
+Then visit the Venue Directory page you find. The page will contain lines like:
+  Email: events@venue.com
+  Email: enquiries@venue.com
+  Max capacity: 150
+  Bedrooms: 80
+Extract ALL of these values from the page. The emails appear after "Email:" labels in the contact section.
 
-Search in this order:
-Step 1: Search: site:venuedirectory.com "${venue.name}" ${location}
-- Visit the Venue Directory listing page if found. It shows capacity, bedrooms, and email addresses directly on the page.
-Step 2: If not on Venue Directory, search: "${venue.name}" ${location} events email capacity delegates bedrooms
-Step 3: Visit the venue's own website contact/meetings/events/conferences page.
+STEP 2 — If no Venue Directory page found:
+Search for: "${venue.name}" ${location} events email address conference
+Visit their website contact or meetings page and find the email.
 
-Rules:
-- Accept ANY events/meetings email — events@, conferences@, meetings@, enquiries@, info@, reservations@, sales@ etc
-- For capacity, take the LARGEST room/theatre capacity figure you can find
-- For bedrooms, take the total number of hotel bedrooms/rooms
-- Do not give up after one failed search — try all steps
+STEP 3 — Also try:
+Search for: "${venue.name}" ${location} conference enquiries email
 
-Return ONLY this exact JSON, no other text:
-{"email":"found@example.com","emailFound":true,"capacity":150,"bedroomsFound":80,"dataSource":"venuedirectory"}
-If email not found use: "email":"","emailFound":false
-If capacity not found use: "capacity":null
-If bedrooms not found use: "bedroomsFound":null
-dataSource should be "venuedirectory", "website", or "google"`;
+IMPORTANT RULES:
+- You MUST actually visit the page URLs you find, not just read search snippets
+- Venue Directory pages always have emails listed — look for "Email:" followed by email addresses
+- Accept any email: events@, eventsdesk@, eventsmgr@, enquiries@, meetings@, info@, reservations@
+- For capacity use the largest delegate/theatre figure
+- For bedrooms use total hotel room count
+
+Return ONLY this JSON with no other text:
+{"email":"events@venue.com","emailFound":true,"capacity":200,"bedroomsFound":100,"dataSource":"venuedirectory"}
+Use null for any value not found. emailFound must be true/false.`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -677,8 +683,10 @@ dataSource should be "venuedirectory", "website", or "google"`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        max_tokens: 2000,
+        tools: [
+          { type: 'web_search_20250305', name: 'web_search' }
+        ],
         messages: [{ role: 'user', content: prompt }]
       })
     });
