@@ -236,6 +236,7 @@
 <script>
 // ── State ──────────────────────────────────────────────
 let allVenues = [], filteredVenues = [], selectedVenues = new Set(), emailResults = {}, apiKeyStored = '';
+let pinManuallyMoved = false;
 let currentLat = 51.5074, currentLon = -0.1278; // default: London
 let currentPage = 1;
 const PER_PAGE = 10;
@@ -262,6 +263,7 @@ let radiusCircle = L.circle([currentLat, currentLon], {
 let venueLayer = L.layerGroup().addTo(map);
 
 pin.on('dragend', function(e) {
+  pinManuallyMoved = true;
   const pos = e.target.getLatLng();
   currentLat = pos.lat;
   currentLon = pos.lng;
@@ -270,6 +272,7 @@ pin.on('dragend', function(e) {
 });
 
 map.on('click', function(e) {
+  pinManuallyMoved = true;
   currentLat = e.latlng.lat;
   currentLon = e.latlng.lng;
   pin.setLatLng([currentLat, currentLon]);
@@ -304,6 +307,7 @@ async function geocodeLocation(location) {
 }
 
 document.getElementById('location').addEventListener('keydown', async function(e) {
+  pinManuallyMoved = false;
   if (e.key !== 'Enter') return;
   const val = this.value.trim();
   if (!val) return;
@@ -353,8 +357,8 @@ async function searchVenues() {
   document.getElementById('paginationWrap').innerHTML = '';
 
   try {
-    // If text entered, geocode it first
-    if (locationInput) {
+    // Only geocode from text if the user hasn't manually moved the pin
+    if (locationInput && !pinManuallyMoved) {
       try {
         const geo = await geocodeLocation(locationInput);
         currentLat = geo.lat; currentLon = geo.lon;
@@ -363,6 +367,8 @@ async function searchVenues() {
         map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
       } catch(e) { /* use current pin position */ }
     }
+    // Always reset after search so next typed location works normally
+    pinManuallyMoved = false;
 
     const radiusM = milesToMeters(radius);
     const elements = await overpassSearch(currentLat, currentLon, radiusM);
