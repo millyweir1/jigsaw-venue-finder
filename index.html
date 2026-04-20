@@ -277,42 +277,33 @@ let searchMarker = null;
 let venueMarkers = [];
 let currentGeo = null;
 
+function drawMapOverlays(lat, lon) {
+  try {
+    if (searchCircle) { map.removeLayer(searchCircle); searchCircle = null; }
+    if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+    venueMarkers.forEach(m => { try { map.removeLayer(m); } catch(e){} });
+    venueMarkers = [];
+    const radiusMiles = parseFloat(document.getElementById("radius").value);
+    const radiusM = radiusMiles * 1609.34;
+    searchCircle = L.circle([lat, lon], { radius: radiusM, color: "#1a3a5c", weight: 2, fillColor: "#1a3a5c", fillOpacity: 0.07, dashArray: "6 4" }).addTo(map);
+    const pinIcon = L.divIcon({ className: "", html: "<div style="width:16px;height:16px;background:#1a3a5c;border-radius:50%;border:2.5px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.35);"></div>", iconSize: [16,16], iconAnchor: [8,8] });
+    searchMarker = L.marker([lat, lon], { icon: pinIcon }).addTo(map);
+    searchMarker.bindPopup("<strong>" + document.getElementById("location").value + "</strong><br>Within " + radiusMiles + " mile" + (radiusMiles !== 1 ? "s" : ""));
+    map.fitBounds(searchCircle.getBounds(), { padding: [24, 24] });
+  } catch(e) { console.warn("Map overlay error:", e); }
+}
+
 function initMap(lat, lon) {
-  document.getElementById('mapWrap').style.display = 'block';
+  document.getElementById("mapWrap").style.display = "block";
   if (!map) {
-    map = L.map('map', { zoomControl: true, scrollWheelZoom: false });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 18
-    }).addTo(map);
+    map = L.map("map", { zoomControl: true, scrollWheelZoom: false, preferCanvas: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 18 }).addTo(map);
+    map.setView([lat, lon], 13);
+    setTimeout(function() { map.invalidateSize(); drawMapOverlays(lat, lon); }, 400);
+  } else {
+    map.invalidateSize();
+    drawMapOverlays(lat, lon);
   }
-  if (searchCircle) map.removeLayer(searchCircle);
-  if (searchMarker) map.removeLayer(searchMarker);
-  venueMarkers.forEach(m => map.removeLayer(m));
-  venueMarkers = [];
-
-  const radiusMiles = parseFloat(document.getElementById('radius').value);
-  const radiusM = radiusMiles * 1609.34;
-
-  searchCircle = L.circle([lat, lon], {
-    radius: radiusM,
-    color: '#1a3a5c',
-    weight: 2,
-    fillColor: '#1a3a5c',
-    fillOpacity: 0.07,
-    dashArray: '6 4'
-  }).addTo(map);
-
-  const pinIcon = L.divIcon({
-    className: '',
-    html: '<div style="width:16px;height:16px;background:#1a3a5c;border-radius:50%;border:2.5px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.35);"></div>',
-    iconSize: [16, 16], iconAnchor: [8, 8]
-  });
-  searchMarker = L.marker([lat, lon], { icon: pinIcon }).addTo(map);
-  searchMarker.bindPopup(`<strong>${document.getElementById('location').value}</strong><br>Searching within ${radiusMiles} mile${radiusMiles !== 1 ? 's' : ''}`);
-
-  map.fitBounds(searchCircle.getBounds(), { padding: [24, 24] });
-  setTimeout(() => map.invalidateSize(), 150);
 }
 
 function updateCircle() {
