@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jigsaw Venue Finder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
@@ -16,10 +18,8 @@
   label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
   input, select { width: 100%; padding: 9px 12px; border: 1px solid #d1d9e0; border-radius: 6px; font-size: 14px; font-family: inherit; color: #1a1a2e; background: white; transition: border-color 0.15s; }
   input:focus, select:focus { outline: none; border-color: #1a3a5c; box-shadow: 0 0 0 3px rgba(26,58,92,0.08); }
-  .req-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-  .search-row { display: flex; gap: 10px; align-items: flex-end; }
-  .search-row .loc-wrap { flex: 1; }
-  .search-row .rad-wrap { width: 140px; }
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .search-controls { display: grid; grid-template-columns: 1fr 160px; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
   .btn { padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: background 0.15s, transform 0.1s; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .btn:active { transform: scale(0.98); }
   .btn-primary { background: #1a3a5c; color: white; }
@@ -30,15 +30,24 @@
   .btn-success { background: #0f6e56; color: white; }
   .btn-success:hover { background: #0a5442; }
   .btn-sm { padding: 6px 12px; font-size: 12px; }
-  #mapWrap { display: none; margin-top: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #d1d9e0; position: relative; }
-  #mapCanvas { width: 100%; height: 300px; display: block; background: #e8e0d8; }
-  .map-legend { display: flex; gap: 12px; padding: 8px 12px; background: #f8fafc; border-top: 1px solid #e8ecf0; font-size: 11px; color: #6b7280; flex-wrap: wrap; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; border: 1.5px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); vertical-align: middle; }
-  #venueTypes { display: none; margin-top: 14px; }
-  .filter-row { display: flex; gap: 14px; flex-wrap: wrap; }
+
+  /* Map */
+  #map { height: 380px; width: 100%; border-radius: 8px; border: 1px solid #d1d9e0; margin-bottom: 12px; }
+  .map-hint { font-size: 12px; color: #6b7280; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .map-hint svg { flex-shrink: 0; }
+
+  /* Search button row */
+  .search-btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .current-location-label { font-size: 13px; color: #1a3a5c; font-weight: 500; }
+
+  /* Filters */
+  #venueTypes { display: none; }
+  .filter-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .filter-check { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; cursor: pointer; }
   .filter-check input[type=checkbox] { width: auto; accent-color: #1a3a5c; margin: 0; }
-  .venue-list { display: flex; flex-direction: column; gap: 8px; }
+
+  /* Results */
+  .venue-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
   .venue-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid #e0e4ea; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
   .venue-item:hover { border-color: #1a3a5c; background: #f8fafc; }
   .venue-item.selected { border-color: #1a3a5c; background: #f0f4f8; }
@@ -52,8 +61,19 @@
   .tag-conference { background: #e1f5ee; color: #0f6e56; }
   .tag-distance { background: #f1efe8; color: #5f5e5a; }
   .tag-other { background: #faeeda; color: #854f0b; }
+
+  /* Pagination */
+  .pagination { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .page-btn { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid #d1d9e0; background: white; color: #1a1a2e; transition: all 0.15s; min-width: 36px; text-align: center; }
+  .page-btn:hover { border-color: #1a3a5c; color: #1a3a5c; background: #f0f4f8; }
+  .page-btn.active { background: #1a3a5c; color: white; border-color: #1a3a5c; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .page-info { font-size: 12px; color: #6b7280; margin-left: 6px; }
+
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
   .count-badge { background: #e6f1fb; color: #185fa5; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 10px; }
+
+  /* Email */
   .email-result { padding: 12px 14px; border: 1px solid #e0e4ea; border-radius: 8px; margin-bottom: 8px; }
   .email-result.found { border-color: #0f6e56; background: #f4fbf8; }
   .email-result.searching { border-color: #f0c040; background: #fffdf0; }
@@ -76,9 +96,12 @@
   .api-key-notice strong { display: block; margin-bottom: 4px; }
   .progress-bar { height: 4px; background: #e0e4ea; border-radius: 2px; overflow: hidden; margin: 10px 0; }
   .progress-fill { height: 100%; background: #1a3a5c; border-radius: 2px; transition: width 0.3s; }
-  .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; }
-  .alert-warn { background: #faeeda; color: #854f0b; border: 1px solid #fac775; }
-  @media (max-width: 640px) { .req-grid { grid-template-columns: 1fr 1fr; } .search-row { flex-wrap: wrap; } .search-row .rad-wrap { width: 100%; } }
+  .alert-warn { background: #faeeda; color: #854f0b; border: 1px solid #fac775; padding: 10px 14px; border-radius: 6px; font-size: 13px; }
+
+  @media (max-width: 640px) {
+    .req-grid { grid-template-columns: 1fr 1fr; }
+    .search-controls { grid-template-columns: 1fr; }
+  }
   @media (max-width: 400px) { .req-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -89,6 +112,7 @@
 </header>
 <div class="container">
 
+  <!-- REQUIREMENTS + SEARCH -->
   <div class="card">
     <div class="card-title">Event Requirements</div>
     <div class="req-grid">
@@ -103,49 +127,56 @@
         </select>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <div class="card-title">Venue Search</div>
-    <div class="search-row">
-      <div class="loc-wrap"><label>Location</label><input type="text" id="location" placeholder="e.g. Winchester, Hampshire" /></div>
-      <div class="rad-wrap"><label>Search Radius</label>
-        <select id="radius" onchange="redrawMap()">
-          <option value="0.5">0.5 miles</option><option value="1" selected>1 mile</option>
-          <option value="2">2 miles</option><option value="3">3 miles</option>
-          <option value="5">5 miles</option><option value="10">10 miles</option>
-          <option value="15">15 miles</option><option value="20">20 miles</option>
-          <option value="30">30 miles</option><option value="50">50 miles</option>
+    <div class="card-title" style="margin-top:4px;">Venue Search</div>
+    <div class="search-controls">
+      <div>
+        <label>Location</label>
+        <input type="text" id="location" placeholder="e.g. Winchester, Hampshire — or drag the pin on the map" />
+      </div>
+      <div>
+        <label>Search Radius</label>
+        <select id="radius" onchange="updateRadius()">
+          <option value="0.5">0.5 miles</option>
+          <option value="1" selected>1 mile</option>
+          <option value="2">2 miles</option>
+          <option value="3">3 miles</option>
+          <option value="5">5 miles</option>
+          <option value="10">10 miles</option>
+          <option value="15">15 miles</option>
+          <option value="20">20 miles</option>
+          <option value="30">30 miles</option>
+          <option value="50">50 miles</option>
         </select>
       </div>
-      <div style="padding-top:18px;">
-        <button class="btn btn-primary" onclick="searchVenues()" id="searchBtn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          Search Venues
-        </button>
-      </div>
     </div>
-    <div id="mapWrap">
-      <canvas id="mapCanvas"></canvas>
-      <div class="map-legend">
-        <span><span class="legend-dot" style="background:#1a3a5c;"></span>Search centre</span>
-        <span><span class="legend-dot" style="background:#185fa5;"></span>Hotel</span>
-        <span><span class="legend-dot" style="background:#0f6e56;"></span>Conference</span>
-        <span><span class="legend-dot" style="background:#854f0b;"></span>Other venue</span>
-      </div>
+
+    <div id="map"></div>
+
+    <div class="map-hint">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Type a location above and press Enter, or drag the pin to move the search area. The circle shows your search radius.
     </div>
-    <div id="venueTypes">
-      <label style="margin-bottom:8px;display:block;">Filter by type</label>
-      <div class="filter-row">
-        <label class="filter-check"><input type="checkbox" checked id="filterHotel" onchange="filterVenues()"> Hotels</label>
-        <label class="filter-check"><input type="checkbox" checked id="filterConference" onchange="filterVenues()"> Conference Centres</label>
-        <label class="filter-check"><input type="checkbox" checked id="filterOther" onchange="filterVenues()"> Other Venues</label>
-      </div>
+
+    <div class="search-btn-row">
+      <button class="btn btn-primary" onclick="searchVenues()" id="searchBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Search Venues
+      </button>
+      <span class="current-location-label" id="currentLocLabel"></span>
     </div>
   </div>
 
+  <!-- RESULTS -->
   <div class="card" id="resultsCard" style="display:none;">
     <div class="card-title">Search Results</div>
+    <div id="venueTypes">
+      <div class="filter-row">
+        <label class="filter-check"><input type="checkbox" checked id="filterHotel" onchange="applyFilters()"> Hotels</label>
+        <label class="filter-check"><input type="checkbox" checked id="filterConference" onchange="applyFilters()"> Conference Centres</label>
+        <label class="filter-check"><input type="checkbox" checked id="filterOther" onchange="applyFilters()"> Other Venues</label>
+      </div>
+    </div>
     <div class="toolbar">
       <span class="count-badge" id="resultCount">0 venues found</span>
       <button class="btn btn-secondary btn-sm" onclick="selectAll()">Select all</button>
@@ -153,7 +184,8 @@
       <span style="margin-left:auto;font-size:12px;color:#6b7280;" id="selectedCount">0 selected</span>
     </div>
     <div id="venueList" class="venue-list"></div>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8ecf0;">
+    <div id="paginationWrap" class="pagination" style="margin-bottom:16px;"></div>
+    <div style="padding-top:16px;border-top:1px solid #e8ecf0;">
       <button class="btn btn-success" onclick="goToEmails()" id="findEmailsBtn" disabled>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
         Find Emails for Selected Venues
@@ -161,6 +193,7 @@
     </div>
   </div>
 
+  <!-- EMAIL FINDER -->
   <div class="card" id="emailCard" style="display:none;">
     <div class="card-title">Email Finder</div>
     <div class="api-key-notice" id="apiKeyNotice">
@@ -202,151 +235,67 @@
 </div>
 <script>
 // ── State ──────────────────────────────────────────────
-let allVenues = [], selectedVenues = new Set(), emailResults = {}, apiKeyStored = '';
-let currentGeo = null;
+let allVenues = [], filteredVenues = [], selectedVenues = new Set(), emailResults = {}, apiKeyStored = '';
+let currentLat = 51.5074, currentLon = -0.1278; // default: London
+let currentPage = 1;
+const PER_PAGE = 10;
 
-// ── Canvas Map ─────────────────────────────────────────
-// Pure canvas tile map — no external library, no CSP issues
-const TILE_SIZE = 256;
+// ── Map Setup ──────────────────────────────────────────
+const map = L.map('map', { zoomControl: true, scrollWheelZoom: true });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 18
+}).addTo(map);
+map.setView([currentLat, currentLon], 13);
 
-function lon2tile(lon, zoom) { return Math.floor((lon + 180) / 360 * Math.pow(2, zoom)); }
-function lat2tile(lat, zoom) { return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom)); }
-function tile2lon(x, zoom) { return x / Math.pow(2, zoom) * 360 - 180; }
-function tile2lat(y, zoom) { const n = Math.PI - 2 * Math.PI * y / Math.pow(2, zoom); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+// Draggable pin
+const pinIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:20px;height:20px;background:#1a3a5c;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:grab;"></div>`,
+  iconSize: [20, 20], iconAnchor: [10, 20]
+});
+let pin = L.marker([currentLat, currentLon], { icon: pinIcon, draggable: true }).addTo(map);
+let radiusCircle = L.circle([currentLat, currentLon], {
+  radius: 1609.34, color: '#1a3a5c', weight: 2,
+  fillColor: '#1a3a5c', fillOpacity: 0.07, dashArray: '7 5'
+}).addTo(map);
+let venueLayer = L.layerGroup().addTo(map);
 
-function latLonToCanvas(lat, lon, topLeftLat, topLeftLon, zoom, canvas) {
-  const totalTiles = Math.pow(2, zoom);
-  const x = (lon - topLeftLon) / 360 * totalTiles * TILE_SIZE;
-  const topY = (1 - Math.log(Math.tan(topLeftLat * Math.PI / 180) + 1 / Math.cos(topLeftLat * Math.PI / 180)) / Math.PI) / 2 * totalTiles * TILE_SIZE;
-  const curY = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * totalTiles * TILE_SIZE;
-  return { x, y: curY - topY };
+pin.on('dragend', function(e) {
+  const pos = e.target.getLatLng();
+  currentLat = pos.lat;
+  currentLon = pos.lng;
+  radiusCircle.setLatLng([currentLat, currentLon]);
+  reverseGeocode(currentLat, currentLon);
+});
+
+map.on('click', function(e) {
+  currentLat = e.latlng.lat;
+  currentLon = e.latlng.lng;
+  pin.setLatLng([currentLat, currentLon]);
+  radiusCircle.setLatLng([currentLat, currentLon]);
+  reverseGeocode(currentLat, currentLon);
+});
+
+async function reverseGeocode(lat, lon) {
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { headers: { 'User-Agent': 'JigsawVenueFinder/1.0' } });
+    const data = await resp.json();
+    const place = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+    const label = place ? place : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    document.getElementById('location').value = label;
+    document.getElementById('currentLocLabel').textContent = '';
+  } catch(e) {}
 }
 
-function milesToDegLat(miles) { return miles / 69.0; }
-function milesToDegLon(miles, lat) { return miles / (69.0 * Math.cos(lat * Math.PI / 180)); }
-
-function drawMap(geo, radiusMiles, venues) {
-  const canvas = document.getElementById('mapCanvas');
-  const wrap = document.getElementById('mapWrap');
-  wrap.style.display = 'block';
-  const W = wrap.clientWidth || 700;
-  canvas.width = W;
-  canvas.height = 300;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#e8e0d8';
-  ctx.fillRect(0, 0, W, 300);
-
-  // Pick zoom level based on radius
-  const radiusKm = radiusMiles * 1.609;
-  let zoom = 13;
-  if (radiusMiles >= 30) zoom = 9;
-  else if (radiusMiles >= 15) zoom = 10;
-  else if (radiusMiles >= 10) zoom = 11;
-  else if (radiusMiles >= 5) zoom = 12;
-  else if (radiusMiles >= 2) zoom = 13;
-  else zoom = 14;
-
-  const tileX = lon2tile(geo.lon, zoom);
-  const tileY = lat2tile(geo.lat, zoom);
-
-  // How many tiles we need
-  const tilesX = Math.ceil(W / TILE_SIZE) + 2;
-  const tilesY = Math.ceil(300 / TILE_SIZE) + 2;
-  const startX = tileX - Math.floor(tilesX / 2);
-  const startY = tileY - Math.floor(tilesY / 2);
-  const topLeftLat = tile2lat(startY, zoom);
-  const topLeftLon = tile2lon(startX, zoom);
-  const offsetX = (tileX - startX) * TILE_SIZE - W / 2;
-  const offsetY = (tileY - startY) * TILE_SIZE - 150;
-
-  let tilesLoaded = 0;
-  const totalTiles = tilesX * tilesY;
-
-  function tryDraw() {
-    tilesLoaded++;
-    if (tilesLoaded >= totalTiles) renderOverlays();
-  }
-
-  // Draw tiles
-  for (let dy = 0; dy < tilesY; dy++) {
-    for (let dx = 0; dx < tilesX; dx++) {
-      const tx = startX + dx, ty = startY + dy;
-      const px = dx * TILE_SIZE - offsetX;
-      const py = dy * TILE_SIZE - offsetY;
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => { ctx.drawImage(img, px, py, TILE_SIZE, TILE_SIZE); tryDraw(); };
-      img.onerror = () => tryDraw();
-      const sub = ['a','b','c'][Math.abs(tx+ty) % 3];
-      img.src = `https://${sub}.tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
-    }
-  }
-
-  function renderOverlays() {
-    // Convert geo to canvas coords
-    function toCanvas(lat, lon) {
-      const pos = latLonToCanvas(lat, lon, topLeftLat, topLeftLon, zoom, canvas);
-      return { x: pos.x - offsetX, y: pos.y - offsetY };
-    }
-
-    const centre = toCanvas(geo.lat, geo.lon);
-
-    // Draw radius circle (approximate in pixels)
-    const edgeLat = geo.lat + milesToDegLat(radiusMiles);
-    const edgePos = toCanvas(edgeLat, geo.lon);
-    const radiusPx = Math.abs(centre.y - edgePos.y);
-
-    ctx.beginPath();
-    ctx.arc(centre.x, centre.y, radiusPx, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(26, 58, 92, 0.08)';
-    ctx.fill();
-    ctx.strokeStyle = '#1a3a5c';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw venue dots
-    for (const v of venues) {
-      if (!v.lat || !v.lon) continue;
-      const pos = toCanvas(v.lat, v.lon);
-      const color = v.type === 'hotel' ? '#185fa5' : v.type === 'conference' ? '#0f6e56' : '#854f0b';
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 6, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    // Draw centre pin
-    ctx.beginPath();
-    ctx.arc(centre.x, centre.y, 8, 0, 2 * Math.PI);
-    ctx.fillStyle = '#1a3a5c';
-    ctx.fill();
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    // Attribution
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.fillRect(W - 130, 283, 130, 17);
-    ctx.fillStyle = '#555';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('© OpenStreetMap contributors', W - 128, 294);
-  }
-
-  // Fallback if tiles take too long
-  setTimeout(renderOverlays, 3000);
+function updateRadius() {
+  const r = parseFloat(document.getElementById('radius').value) * 1609.34;
+  radiusCircle.setRadius(r);
+  map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
 }
 
-function redrawMap() {
-  if (currentGeo) drawMap(currentGeo, parseFloat(document.getElementById('radius').value), allVenues);
-}
-
-// ── Geocode ────────────────────────────────────────────
-async function geocode(location) {
+// ── Geocode forward ────────────────────────────────────
+async function geocodeLocation(location) {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1&countrycodes=gb`;
   const resp = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'JigsawVenueFinder/1.0' } });
   const data = await resp.json();
@@ -354,6 +303,20 @@ async function geocode(location) {
   return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
 }
 
+document.getElementById('location').addEventListener('keydown', async function(e) {
+  if (e.key !== 'Enter') return;
+  const val = this.value.trim();
+  if (!val) return;
+  try {
+    const geo = await geocodeLocation(val);
+    currentLat = geo.lat; currentLon = geo.lon;
+    pin.setLatLng([currentLat, currentLon]);
+    radiusCircle.setLatLng([currentLat, currentLon]);
+    updateRadius();
+  } catch(err) { alert(err.message); }
+});
+
+// ── Overpass ───────────────────────────────────────────
 function milesToMeters(m) { return m * 1609.34; }
 
 async function overpassSearch(lat, lon, radiusM) {
@@ -377,23 +340,33 @@ function haversine(lat1, lon1, lat2, lon2) {
 
 // ── Main Search ────────────────────────────────────────
 async function searchVenues() {
-  const location = document.getElementById('location').value.trim();
   const radius = parseFloat(document.getElementById('radius').value);
-  if (!location) { alert('Please enter a location.'); return; }
+  const locationInput = document.getElementById('location').value.trim();
+
   const btn = document.getElementById('searchBtn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="border-top-color:white;width:14px;height:14px;border-width:2px;"></div> Searching...';
-  const list = document.getElementById('venueList');
-  list.innerHTML = '<div class="loading"><div class="spinner"></div> Locating ' + location + '...</div>';
+
   document.getElementById('resultsCard').style.display = 'block';
   document.getElementById('emailCard').style.display = 'none';
-  document.getElementById('venueTypes').style.display = 'none';
+  document.getElementById('venueList').innerHTML = '<div class="loading"><div class="spinner"></div> Finding venues...</div>';
+  document.getElementById('paginationWrap').innerHTML = '';
+
   try {
-    const geo = await geocode(location);
-    currentGeo = geo;
-    list.innerHTML = '<div class="loading"><div class="spinner"></div> Finding venues within ' + radius + ' mile' + (radius!==1?'s':'') + '...</div>';
+    // If text entered, geocode it first
+    if (locationInput) {
+      try {
+        const geo = await geocodeLocation(locationInput);
+        currentLat = geo.lat; currentLon = geo.lon;
+        pin.setLatLng([currentLat, currentLon]);
+        radiusCircle.setLatLng([currentLat, currentLon]);
+        map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+      } catch(e) { /* use current pin position */ }
+    }
+
     const radiusM = milesToMeters(radius);
-    const elements = await overpassSearch(geo.lat, geo.lon, radiusM);
+    const elements = await overpassSearch(currentLat, currentLon, radiusM);
+
     allVenues = [];
     const seen = new Set();
     for (const el of elements) {
@@ -405,38 +378,68 @@ async function searchVenues() {
       seen.add(key);
       const lat = el.lat || (el.center && el.center.lat);
       const lon = el.lon || (el.center && el.center.lon);
-      const dist = lat ? haversine(geo.lat, geo.lon, lat, lon) : null;
+      const dist = lat ? haversine(currentLat, currentLon, lat, lon) : null;
       const addr = [tags['addr:housenumber'],tags['addr:street'],tags['addr:city']||tags['addr:town']].filter(Boolean).join(', ') || tags['addr:full'] || '';
       allVenues.push({ id: el.id, name, address: addr, type: getType(tags), distance: dist, lat, lon, phone: tags.phone||tags['contact:phone']||'', email: tags.email||tags['contact:email']||'' });
     }
     allVenues.sort((a,b) => (a.distance||999)-(b.distance||999));
     selectedVenues.clear();
-    drawMap(geo, radius, allVenues);
+
+    // Draw venue markers on map
+    venueLayer.clearLayers();
+    for (const v of allVenues) {
+      if (!v.lat || !v.lon) continue;
+      const color = v.type==='hotel'?'#185fa5':v.type==='conference'?'#0f6e56':'#854f0b';
+      const vIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:11px;height:11px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [11,11], iconAnchor: [5.5,5.5]
+      });
+      const marker = L.marker([v.lat, v.lon], { icon: vIcon });
+      marker.bindPopup(`<strong style="font-size:13px;">${v.name}</strong>${v.address?'<br><span style="font-size:11px;color:#666;">'+v.address+'</span>':''}${v.distance?'<br><span style="font-size:11px;color:#888;">'+v.distance.toFixed(2)+' mi</span>':''}`);
+      venueLayer.addLayer(marker);
+    }
+
     document.getElementById('venueTypes').style.display = allVenues.length ? 'block' : 'none';
-    renderVenues();
-    document.getElementById('resultCount').textContent = allVenues.length + ' venue' + (allVenues.length!==1?'s':'') + ' found';
-    if (!allVenues.length) list.innerHTML = '<div class="empty">No venues found within ' + radius + ' mile' + (radius!==1?'s':'') + ' of ' + location + '. Try a larger radius.</div>';
+    applyFilters();
+
   } catch(e) {
-    list.innerHTML = '<div class="alert alert-warn">' + (e.message || 'Search failed. Please try again.') + '</div>';
+    document.getElementById('venueList').innerHTML = '<div class="alert-warn">' + (e.message || 'Search failed. Please try again.') + '</div>';
   }
+
   btn.disabled = false;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search Venues';
+  document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function filterVenues() { renderVenues(); }
-
-function renderVenues() {
+// ── Filter + Paginate ──────────────────────────────────
+function applyFilters() {
   const showH = document.getElementById('filterHotel').checked;
   const showC = document.getElementById('filterConference').checked;
   const showO = document.getElementById('filterOther').checked;
+  filteredVenues = allVenues.filter(v =>
+    (v.type==='hotel'&&showH) || (v.type==='conference'&&showC) || (v.type==='other'&&showO)
+  );
+  currentPage = 1;
+  document.getElementById('resultCount').textContent = filteredVenues.length + ' venue' + (filteredVenues.length!==1?'s':'') + ' found';
+  renderPage();
+}
+
+function renderPage() {
   const list = document.getElementById('venueList');
+  const pagWrap = document.getElementById('paginationWrap');
+  const totalPages = Math.ceil(filteredVenues.length / PER_PAGE);
+  const start = (currentPage - 1) * PER_PAGE;
+  const pageVenues = filteredVenues.slice(start, start + PER_PAGE);
+
+  if (!filteredVenues.length) {
+    list.innerHTML = '<div class="empty">No venues found. Try a larger radius or different location.</div>';
+    pagWrap.innerHTML = '';
+    return;
+  }
+
   list.innerHTML = '';
-  let shown = 0;
-  for (const v of allVenues) {
-    if (v.type==='hotel'&&!showH) continue;
-    if (v.type==='conference'&&!showC) continue;
-    if (v.type==='other'&&!showO) continue;
-    shown++;
+  for (const v of pageVenues) {
     const div = document.createElement('div');
     div.className = 'venue-item' + (selectedVenues.has(v.id)?' selected':'');
     div.onclick = () => toggleVenue(v.id, div);
@@ -446,7 +449,40 @@ function renderVenues() {
     div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id)?'checked':''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address?`<div class="venue-address">${v.address}</div>`:''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}${v.phone?`<span class="tag tag-distance">${v.phone}</span>`:''}</div></div>`;
     list.appendChild(div);
   }
-  if (!shown && allVenues.length) list.innerHTML = '<div class="empty">No venues match the current filters.</div>';
+
+  // Pagination controls
+  pagWrap.innerHTML = '';
+  if (totalPages <= 1) return;
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn'; prevBtn.textContent = '←';
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.onclick = () => { currentPage--; renderPage(); document.getElementById('resultsCard').scrollIntoView({behavior:'smooth',block:'start'}); };
+  pagWrap.appendChild(prevBtn);
+
+  for (let p = 1; p <= totalPages; p++) {
+    if (totalPages > 7 && p > 2 && p < totalPages - 1 && Math.abs(p - currentPage) > 1) {
+      if (p === 3 || p === totalPages - 2) { const dots = document.createElement('span'); dots.textContent = '…'; dots.style.cssText='padding:0 4px;color:#9ca3af;font-size:13px;'; pagWrap.appendChild(dots); }
+      continue;
+    }
+    const pb = document.createElement('button');
+    pb.className = 'page-btn' + (p === currentPage ? ' active' : '');
+    pb.textContent = p;
+    pb.onclick = ((pg) => () => { currentPage = pg; renderPage(); document.getElementById('resultsCard').scrollIntoView({behavior:'smooth',block:'start'}); })(p);
+    pagWrap.appendChild(pb);
+  }
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn'; nextBtn.textContent = '→';
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.onclick = () => { currentPage++; renderPage(); document.getElementById('resultsCard').scrollIntoView({behavior:'smooth',block:'start'}); };
+  pagWrap.appendChild(nextBtn);
+
+  const info = document.createElement('span');
+  info.className = 'page-info';
+  info.textContent = `Page ${currentPage} of ${totalPages} · ${filteredVenues.length} venues`;
+  pagWrap.appendChild(info);
+
   updateCount();
 }
 
@@ -463,9 +499,19 @@ function updateCount() {
   document.getElementById('findEmailsBtn').disabled = n === 0;
 }
 
-function selectAll() { allVenues.forEach(v=>selectedVenues.add(v.id)); document.querySelectorAll('.venue-item').forEach(el=>{el.classList.add('selected');el.querySelector('input[type=checkbox]').checked=true;}); updateCount(); }
-function selectNone() { selectedVenues.clear(); document.querySelectorAll('.venue-item').forEach(el=>{el.classList.remove('selected');el.querySelector('input[type=checkbox]').checked=false;}); updateCount(); }
+function selectAll() {
+  filteredVenues.forEach(v => selectedVenues.add(v.id));
+  document.querySelectorAll('.venue-item').forEach(el => { el.classList.add('selected'); el.querySelector('input[type=checkbox]').checked = true; });
+  updateCount();
+}
 
+function selectNone() {
+  selectedVenues.clear();
+  document.querySelectorAll('.venue-item').forEach(el => { el.classList.remove('selected'); el.querySelector('input[type=checkbox]').checked = false; });
+  updateCount();
+}
+
+// ── Email ──────────────────────────────────────────────
 function goToEmails() {
   document.getElementById('emailCard').style.display = 'block';
   document.getElementById('emailCard').scrollIntoView({ behavior:'smooth', block:'start' });
@@ -490,10 +536,9 @@ function renderEmailSlots() {
   for (const v of venues) {
     emailResults[v.id] = { status:'pending', email:v.email||'', venue:v };
     const div = document.createElement('div');
-    div.className = 'email-result';
-    div.id = 'er-' + v.id;
+    div.className = 'email-result'; div.id = 'er-'+v.id;
     const gq = encodeURIComponent(`"${v.name}" ${location} events email address`);
-    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email||''}</div><a href="https://www.google.com/search?q=${gq}" target="_blank" class="google-link">&#128269; Google: "${v.name}" ${location} events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
+    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email||''}</div><a href="https://www.google.com/search?q=${gq}" target="_blank" class="google-link">&#128269; Google: "${v.name}" events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
     container.appendChild(div);
     if (v.email) updateEmailResult(v.id, v.email, 'found');
   }
@@ -502,9 +547,7 @@ function renderEmailSlots() {
 
 function updateEmailResult(id, email, status) {
   emailResults[id] = { ...emailResults[id], status, email };
-  const div = document.getElementById('er-'+id);
-  const badge = document.getElementById('badge-'+id);
-  const val = document.getElementById('email-val-'+id);
+  const div = document.getElementById('er-'+id), badge = document.getElementById('badge-'+id), val = document.getElementById('email-val-'+id);
   if (!div) return;
   div.className = 'email-result '+(status==='found'?'found':status==='searching'?'searching':'not-found');
   badge.className = 'status-badge '+(status==='found'?'badge-found':status==='searching'?'badge-searching':'badge-notfound');
@@ -567,13 +610,10 @@ function buildCopySection() {
 
 function copyToClipboard() {
   navigator.clipboard.writeText(document.getElementById('emailCopyBox').textContent).then(()=>{
-    const msg = document.getElementById('copiedMsg');
-    msg.style.display='inline';
+    const msg=document.getElementById('copiedMsg'); msg.style.display='inline';
     setTimeout(()=>{msg.style.display='none';},2500);
   });
 }
-
-document.getElementById('location').addEventListener('keydown', e => { if (e.key==='Enter') searchVenues(); });
 </script>
 </body>
 </html>
