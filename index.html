@@ -204,18 +204,14 @@
   <!-- EMAIL FINDER -->
   <div class="card" id="emailCard" style="display:none;">
     <div class="card-title">Email Finder</div>
-    <div class="api-key-notice" id="apiKeyNotice">
-      <strong>Anthropic API Key — enables AI email search</strong>
-      Paste your key below. Stored in this browser session only.
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <input type="password" id="apiKey" placeholder="sk-ant-api03-..." style="flex:1;" />
-      <button class="btn btn-secondary" onclick="saveKey()">Save Key</button>
+    <div style="background:#e1f5ee;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;">
+      <strong style="display:block;margin-bottom:4px;">✓ Free email search — no API key needed</strong>
+      Searches Venue Directory directly for each venue's events email address.
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="findAllEmails()" id="findAllBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        AI Search All Selected
+        Search All Emails (Free)
       </button>
       <button class="btn btn-secondary" onclick="buildCopySection()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -596,14 +592,7 @@ function goToEmails() {
   renderEmailSlots();
 }
 
-function saveKey() {
-  apiKeyStored = document.getElementById('apiKey').value.trim();
-  if (apiKeyStored) {
-    const n = document.getElementById('apiKeyNotice');
-    n.innerHTML = '<strong style="color:#0f6e56;">&#10003; API key saved for this session</strong> AI email search is active.';
-    n.style.cssText = 'background:#f4fbf8;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;';
-  }
-}
+function saveKey() { /* no longer needed */ }
 
 function renderEmailSlots() {
   const container = document.getElementById('emailResults');
@@ -637,74 +626,70 @@ function updateEmailResult(id, email, status) {
 function saveManualEmail(id) { const v = document.getElementById('manual-'+id).value.trim(); if (v) updateEmailResult(id, v, 'found'); }
 
 async function aiSearchVenue(venue) {
-  if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
+  // Completely free — scrapes Venue Directory directly, no API key needed
   const location = document.getElementById('location').value.trim();
-  // Build a specific venue+city search term
   const cityGuess = location.split(',')[0].trim();
   const venueFull = venue.name.toLowerCase().includes(cityGuess.toLowerCase())
-    ? venue.name
-    : `${venue.name} ${cityGuess}`;
-
-  const prompt = `I need the events/conference email address, max delegate capacity, and bedroom count for this UK venue: "${venueFull}".
-
-Do these steps in order:
-
-1. Search for: ${venueFull} site:venuedirectory.com
-   Visit the Venue Directory page. It lists emails like: Email: eventsdesk@malmaison.com
-   Copy the first events/conference email you see.
-
-2. If step 1 fails, search for: ${venueFull} events email
-   Visit the venue website contact or meetings page.
-
-3. If still nothing, search for: "${venue.name}" ${location} conference enquiries email
-
-Return ONLY this JSON — no other text at all:
-{"email":"eventsdesk@malmaison.com","emailFound":true,"capacity":120,"bedroomsFound":72,"dataSource":"venuedirectory"}
-
-Rules:
-- emailFound is true if you found ANY email, false if genuinely nothing exists online
-- capacity = largest meeting room/theatre capacity number found (integer or null)
-- bedroomsFound = total hotel bedrooms (integer or null)
-- dataSource = "venuedirectory", "website", or "google"`;
+    ? venue.name : `${venue.name} ${cityGuess}`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKeyStored,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await resp.json();
-    if (data.error) { console.warn('API error:', data.error); return { email: null, capacity: null, bedrooms: null }; }
+    // Step 1: Search Venue Directory for the venue
+    const searchUrl = `https://www.venuedirectory.com/search/${encodeURIComponent(venueFull)}/1/0`;
+    const proxySearch = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+    const searchResp = await fetch(proxySearch);
+    const searchData = await searchResp.json();
+    const searchHtml = searchData.contents || '';
 
-    const fullText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    console.log('AI response for', venue.name, ':', fullText.slice(0, 400));
+    // Extract first venue listing URL from search results
+    const venueUrlMatch = searchHtml.match(/href="(\/(?:united-kingdom\/top-meeting-rooms-in|venue)\/[^"]+)"/);
+    if (venueUrlMatch) {
+      const venuePageUrl = 'https://www.venuedirectory.com' + venueUrlMatch[1];
+      const proxyPage = `https://api.allorigins.win/get?url=${encodeURIComponent(venuePageUrl)}`;
+      const pageResp = await fetch(proxyPage);
+      const pageData = await pageResp.json();
+      const pageHtml = pageData.contents || '';
 
-    // Find JSON object containing emailFound
-    const jsonMatches = [...fullText.matchAll(/\{[^{}]*"emailFound"[^{}]*\}/g)];
-    if (!jsonMatches.length) {
-      console.warn('No JSON found for', venue.name);
-      return { email: null, capacity: null, bedrooms: null };
+      // Extract email — Venue Directory lists them as "Email: someone@venue.com"
+      const emailMatches = [...pageHtml.matchAll(/Email:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g)];
+      // Extract capacity
+      const capMatch = pageHtml.match(/(\d+)\s*(?:delegates?|max(?:imum)?\s*capacity|meeting\s*room\s*capacity)/i)
+        || pageHtml.match(/capacity[^0-9]*(\d+)/i);
+      // Extract bedrooms
+      const bedMatch = pageHtml.match(/(\d+)\s*(?:bedrooms?|hotel\s*rooms?|guest\s*rooms?)/i)
+        || pageHtml.match(/(\d+)\s*rooms?\s*and\s*suites/i);
+
+      if (emailMatches.length) {
+        // Pick the most relevant email — prefer events/conference over info
+        const emails = emailMatches.map(m => m[1]);
+        const bestEmail = emails.find(e => /event|conference|meeting|enquir|meeting/i.test(e)) || emails[0];
+        return {
+          email: bestEmail,
+          capacity: capMatch ? parseInt(capMatch[1]) : null,
+          bedrooms: bedMatch ? parseInt(bedMatch[1]) : null,
+          dataSource: 'venuedirectory'
+        };
+      }
+      // No email on VD page — still return capacity if found
+      if (capMatch || bedMatch) {
+        return {
+          email: null,
+          capacity: capMatch ? parseInt(capMatch[1]) : null,
+          bedrooms: bedMatch ? parseInt(bedMatch[1]) : null,
+          dataSource: 'venuedirectory'
+        };
+      }
     }
-    const parsed = JSON.parse(jsonMatches[jsonMatches.length - 1][0]);
-    return {
-      email: parsed.emailFound && parsed.email ? parsed.email : null,
-      capacity: parsed.capacity || null,
-      bedrooms: parsed.bedroomsFound || null,
-      dataSource: parsed.dataSource || 'unknown'
-    };
   } catch(e) {
-    console.warn('aiSearchVenue error:', venue.name, e.message);
-    return { email: null, capacity: null, bedrooms: null };
+    console.warn('VenueDirectory scrape failed for', venue.name, e.message);
+  }
+
+  // Step 2: Try fetching the venue website directly via allorigins
+  try {
+    const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(venue.name + ' ' + cityGuess + ' events email conference')}`;
+    // Can't scrape Google — return null so user gets the Google link fallback
+    return { email: null, capacity: null, bedrooms: null, dataSource: 'notfound' };
+  } catch(e) {
+    return { email: null, capacity: null, bedrooms: null, dataSource: 'notfound' };
   }
 }
 
@@ -726,28 +711,24 @@ async function findAllEmails() {
     document.getElementById('progressText').textContent = `Searching ${i+1} of ${venues.length}: ${v.name}`;
     updateEmailResult(v.id,'','searching');
     if (v.email && v.aiChecked) { updateEmailResult(v.id,v.email,'found'); continue; }
-    if (apiKeyStored) {
-      const result = await aiSearchVenue(v);
-      // Update venue capacity data if we got it
-      if (result.capacity || result.bedrooms) {
-        v.aiCapacity = result.capacity;
-        v.aiBedrooms = result.bedrooms;
-        v.aiDataSource = result.dataSource;
-        v.aiChecked = true;
-        // Re-render current page to update capacity badges
-        renderPage();
-      }
-      const emailToUse = result.email || v.email || '';
-      updateEmailResult(v.id, emailToUse, emailToUse ? 'found' : 'not-found');
+    const result = await aiSearchVenue(v);
+    // Update venue capacity data if we got it
+    if (result.capacity || result.bedrooms) {
+      v.aiCapacity = result.capacity;
+      v.aiBedrooms = result.bedrooms;
+      v.aiDataSource = result.dataSource;
+      v.aiChecked = true;
+      renderPage();
     }
-    else updateEmailResult(v.id, v.email||'', v.email?'found':'not-found');
+    const emailToUse = result.email || v.email || '';
+    updateEmailResult(v.id, emailToUse, emailToUse ? 'found' : 'not-found');
     await new Promise(r=>setTimeout(r,400));
   }
   document.getElementById('progressFill').style.width='100%';
   document.getElementById('progressText').textContent='Search complete.';
   setTimeout(()=>{document.getElementById('progressWrap').style.display='none';},2000);
   btn.disabled=false;
-  btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> AI Search All Selected';
+  btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search All Emails (Free)';
   buildCopySection();
 }
 
