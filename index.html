@@ -567,16 +567,28 @@ function saveManualEmail(id) { const v = document.getElementById('manual-'+id).v
 async function aiSearchEmail(venue) {
   if (!apiKeyStored) return null;
   const location = document.getElementById('location').value.trim();
-  const prompt = `Find the events or conference enquiry email address for "${venue.name}" venue in ${location}, UK. Return ONLY a JSON object: {"email":"events@venue.com","found":true} or {"email":"","found":false}. No other text or markdown.`;
+  const prompt = `Search the web for the email address for "${venue.name}" in ${location}, UK.
+
+Search for: "${venue.name}" ${location} events email
+Also try: "${venue.name}" ${location} conference enquiries contact email
+
+Look at the venue's own website, their contact page, and any booking/events enquiry page. Accept any events, conferences, sales, or general enquiry email address.
+
+Return ONLY valid JSON with no extra text: {"email":"found@email.com","found":true}
+If genuinely no email exists anywhere online after searching, return: {"email":"","found":false}
+Do not give up easily — check the website contact page directly if needed.`;
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKeyStored,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})
     });
     const data = await resp.json();
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+    const clean = text.replace(/```json|```/g,'').trim();
+    const jsonMatch = clean.match(/\{[^}]+\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
     return parsed.found ? parsed.email : null;
   } catch(e) { return null; }
 }
