@@ -61,6 +61,9 @@
   .tag-conference { background: #e1f5ee; color: #0f6e56; }
   .tag-distance { background: #f1efe8; color: #5f5e5a; }
   .tag-other { background: #faeeda; color: #854f0b; }
+  .tag-capacity-confirmed { background: #e1f5ee; color: #0f6e56; }
+  .tag-capacity-unconfirmed { background: #faeeda; color: #854f0b; }
+  .tag-capacity-no { background: #fcebeb; color: #a32d2d; }
 
   /* Pagination */
   .pagination { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -400,7 +403,10 @@ async function searchVenues() {
       const lon = el.lon || (el.center && el.center.lon);
       const dist = lat ? haversine(currentLat, currentLon, lat, lon) : null;
       const addr = [tags['addr:housenumber'],tags['addr:street'],tags['addr:city']||tags['addr:town']].filter(Boolean).join(', ') || tags['addr:full'] || '';
-      allVenues.push({ id: el.id, name, address: addr, type: getType(tags), distance: dist, lat, lon, phone: tags.phone||tags['contact:phone']||'', email: tags.email||tags['contact:email']||'' });
+      // Extract capacity from OSM tags where available
+      const osmCapacity = parseInt(tags['capacity'] || tags['capacity:persons'] || tags['rooms'] || 0) || null;
+      const osmBedrooms = parseInt(tags['rooms'] || tags['capacity:rooms'] || 0) || null;
+      allVenues.push({ id: el.id, name, address: addr, type: getType(tags), distance: dist, lat, lon, phone: tags.phone||tags['contact:phone']||'', email: tags.email||tags['contact:email']||'', osmCapacity, osmBedrooms });
     }
     allVenues.sort((a,b) => (a.distance||999)-(b.distance||999));
     selectedVenues.clear();
@@ -433,6 +439,19 @@ async function searchVenues() {
 }
 
 // ── Filter + Paginate ──────────────────────────────────
+function getCapacityStatus(v) {
+  const reqDelegates = parseInt(document.getElementById('delegates').value) || 0;
+  const reqBedrooms = parseInt(document.getElementById('bedrooms').value) || 0;
+  if (v.osmCapacity || v.osmBedrooms) {
+    // We have OSM data — check against requirements
+    const capOk = !reqDelegates || !v.osmCapacity || v.osmCapacity >= reqDelegates;
+    const bedOk = !reqBedrooms || !v.osmBedrooms || v.osmBedrooms >= reqBedrooms;
+    if (capOk && bedOk) return 'confirmed';
+    return 'no'; // confirmed too small
+  }
+  return 'unconfirmed'; // no data — needs checking
+}
+
 function applyFilters() {
   const showH = document.getElementById('filterHotel').checked;
   const showC = document.getElementById('filterConference').checked;
@@ -466,7 +485,10 @@ function renderPage() {
     const distTag = v.distance ? `<span class="tag tag-distance">${v.distance.toFixed(2)} mi</span>` : '';
     const typeLabel = v.type==='hotel'?'Hotel':v.type==='conference'?'Conference':'Venue';
     const typeClass = v.type==='hotel'?'tag-hotel':v.type==='conference'?'tag-conference':'tag-other';
-    div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id)?'checked':''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address?`<div class="venue-address">${v.address}</div>`:''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}${v.phone?`<span class="tag tag-distance">${v.phone}</span>`:''}</div></div>`;
+    const capStatus = getCapacityStatus(v);
+    const capLabel = capStatus==='confirmed' ? (v.osmCapacity ? `✓ Capacity: ${v.osmCapacity}` : '✓ Capacity confirmed') : capStatus==='no' ? `✗ Too small (${v.osmCapacity||'?'} cap)` : '? Capacity unconfirmed';
+    const capClass = capStatus==='confirmed'?'tag-capacity-confirmed':capStatus==='no'?'tag-capacity-no':'tag-capacity-unconfirmed';
+    div.innerHTML = `<input type="checkbox" ${selectedVenues.has(v.id)?'checked':''} onclick="event.stopPropagation();toggleVenue(${v.id},this.closest('.venue-item'))" /><div class="venue-info"><div class="venue-name">${v.name}</div>${v.address?`<div class="venue-address">${v.address}</div>`:''}<div class="venue-tags"><span class="tag ${typeClass}">${typeLabel}</span>${distTag}<span class="tag ${capClass}">${capLabel}</span>${v.phone?`<span class="tag tag-distance">${v.phone}</span>`:''}</div></div>`;
     list.appendChild(div);
   }
 
