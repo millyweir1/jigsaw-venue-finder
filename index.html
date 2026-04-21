@@ -205,13 +205,17 @@
   <div class="card" id="emailCard" style="display:none;">
     <div class="card-title">Email Finder</div>
     <div id="vdDataStatus" style="background:#e1f5ee;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;">
-      <strong style="display:block;margin-bottom:4px;">✓ Searching local Venue Directory database</strong>
-      <span id="vdDataCount">Loading venue database...</span>
+      <strong style="display:block;margin-bottom:4px;">AI Email Search</strong>
+      Paste your Anthropic API key below to search Venue Directory automatically.
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input type="password" id="apiKey" placeholder="sk-ant-api03-..." style="flex:1;" />
+      <button class="btn btn-secondary" onclick="saveKey()">Save Key</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="findAllEmails()" id="findAllBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Search All Venues
+        AI Search All Selected
       </button>
       <button class="btn btn-secondary" onclick="buildCopySection()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -694,16 +698,9 @@ async function aiSearchVenue(venue) {
   if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
   const location = document.getElementById('location').value.trim();
   const city = location.split(',')[0].trim();
-  const venueCityName = venue.name.toLowerCase().includes(city.toLowerCase()) ? venue.name : `${venue.name} ${city}`;
+  const venueCityName = venue.name.toLowerCase().includes(city.toLowerCase()) ? venue.name : venue.name + ' ' + city;
 
-  const prompt = `Search venuedirectory.com for "${venueCityName}" UK. Find their listing page and visit it. Extract the events/conference email address (shown as "Email: someone@venue.com" in the contacts section), max delegate capacity, and bedroom count.
-
-Also try searching: "${venueCityName}" events email conference UK
-
-Return ONLY this JSON, no other text:
-{"email":"events@venue.com","emailFound":true,"capacity":150,"bedroomsFound":80,"dataSource":"venuedirectory"}
-
-Use null for any value not found. emailFound must be true or false.`;
+  const prompt = 'Search venuedirectory.com for "' + venueCityName + '" UK. Find their listing and visit it. The page shows emails as "Email: someone@venue.com". Also search Google for "' + venueCityName + '" events email. Return ONLY this JSON: {"email":"events@venue.com","emailFound":true,"capacity":150,"bedroomsFound":80,"dataSource":"venuedirectory"} — use null for missing values.';
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -724,7 +721,7 @@ Use null for any value not found. emailFound must be true or false.`;
     const data = await resp.json();
     if (data.error) { console.warn('API error:', data.error); return { email: null, capacity: null, bedrooms: null }; }
     const fullText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const jsonMatches = [...fullText.matchAll(/\{[^{}]*"emailFound"[^{}]*\}/g)];
+    const jsonMatches = [...fullText.matchAll(/\{"email"[^}]*"emailFound"[^}]*\}/g)];
     if (!jsonMatches.length) return { email: null, capacity: null, bedrooms: null };
     const parsed = JSON.parse(jsonMatches[jsonMatches.length - 1][0]);
     return {
@@ -734,7 +731,7 @@ Use null for any value not found. emailFound must be true or false.`;
       dataSource: parsed.dataSource || 'unknown'
     };
   } catch(e) {
-    console.warn('aiSearchVenue error:', venue.name, e.message);
+    console.warn('Search error:', venue.name, e.message);
     return { email: null, capacity: null, bedrooms: null };
   }
 }
