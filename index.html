@@ -204,14 +204,14 @@
   <!-- EMAIL FINDER -->
   <div class="card" id="emailCard" style="display:none;">
     <div class="card-title">Email Finder</div>
-    <div style="background:#e1f5ee;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;">
-      <strong style="display:block;margin-bottom:4px;">✓ Free email search — no API key needed</strong>
-      Searches Venue Directory directly for each venue's events email address.
+    <div id="vdDataStatus" style="background:#e1f5ee;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;">
+      <strong style="display:block;margin-bottom:4px;">✓ Searching local Venue Directory database</strong>
+      <span id="vdDataCount">Loading venue database...</span>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
       <button class="btn btn-primary" onclick="findAllEmails()" id="findAllBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Search All Emails (Free)
+        Search All Venues
       </button>
       <button class="btn btn-secondary" onclick="buildCopySection()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -236,9 +236,64 @@
     </div>
   </div>
 
+  </div>
+
 </div>
 <script>
 // ── State ──────────────────────────────────────────────
+let venueDatabase = {}; // loaded from venues-data.json
+let venueDatabaseLoaded = false;
+
+// Load the venue database from the JSON file
+async function loadVenueDatabase() {
+  try {
+    const resp = await fetch('venues-data.json');
+    if (!resp.ok) throw new Error('Not found');
+    venueDatabase = await resp.json();
+    venueDatabaseLoaded = true;
+    const count = Object.keys(venueDatabase).length;
+    document.getElementById('vdDataCount').textContent = `${count.toLocaleString()} UK venues loaded from Venue Directory database.`;
+    console.log(`Venue database loaded: ${count} venues`);
+  } catch(e) {
+    document.getElementById('vdDataStatus').style.cssText = 'background:#faeeda;border:1px solid #f0c040;border-radius:8px;padding:12px 16px;font-size:13px;color:#7a5900;margin-bottom:16px;';
+    document.getElementById('vdDataStatus').innerHTML = '<strong style="display:block;margin-bottom:4px;">⚠ Venue database not found</strong>Run the crawl-venues.py script first, then upload venues-data.json to your GitHub repo. Until then, use the Venue Directory links below.';
+  }
+}
+
+function searchVenueInDatabase(venueName, city) {
+  if (!venueDatabaseLoaded) return null;
+  const nameLower = venueName.toLowerCase().trim();
+  const cityLower = city.toLowerCase().trim();
+  
+  // Score each venue in the database
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (const [url, data] of Object.entries(venueDatabase)) {
+    if (!data.name) continue;
+    const dbName = data.name.toLowerCase();
+    const dbUrl = url.toLowerCase();
+    
+    let score = 0;
+    
+    // Exact name match
+    if (dbName.includes(nameLower)) score += 10;
+    // Name in URL
+    const nameWords = nameLower.split(' ').filter(w => w.length > 3);
+    const matchedWords = nameWords.filter(w => dbUrl.includes(w) || dbName.includes(w));
+    score += matchedWords.length * 3;
+    // City match
+    if (dbUrl.includes(cityLower) || (data.address && data.address.toLowerCase().includes(cityLower))) score += 5;
+    
+    if (score > bestScore && score >= 6) {
+      bestScore = score;
+      bestMatch = data;
+    }
+  }
+  return bestMatch;
+}
+
+// ── State continued ──────────────────────────────────────────────
 let allVenues = [], filteredVenues = [], selectedVenues = new Set(), emailResults = {}, apiKeyStored = '';
 let pinManuallyMoved = false;
 let currentLat = 51.5074, currentLon = -0.1278; // default: London
@@ -592,23 +647,30 @@ function goToEmails() {
   renderEmailSlots();
 }
 
-function saveKey() { /* no longer needed */ }
+function saveKey() {
+  apiKeyStored = document.getElementById('apiKey').value.trim();
+  if (apiKeyStored) {
+    const n = document.getElementById('apiKeyNotice');
+    n.innerHTML = '<strong style="color:#0f6e56;">&#10003; API key saved</strong> AI email search is active.';
+    n.style.cssText = 'background:#f4fbf8;border:1px solid #0f6e56;border-radius:8px;padding:12px 16px;font-size:13px;color:#0f6e56;margin-bottom:16px;';
+  }
+}
 
 function renderEmailSlots() {
   const container = document.getElementById('emailResults');
   container.innerHTML = '';
   emailResults = {};
   const location = document.getElementById('location').value.trim();
+  const city = location.split(',')[0].trim();
   const venues = allVenues.filter(v => selectedVenues.has(v.id));
   for (const v of venues) {
-    emailResults[v.id] = { status:'pending', email:v.email||'', venue:v };
+    emailResults[v.id] = { status: 'pending', email: v.email || '', venue: v };
     const div = document.createElement('div');
-    div.className = 'email-result'; div.id = 'er-'+v.id;
-    const city = location.split(',')[0].trim();
+    div.className = 'email-result'; div.id = 'er-' + v.id;
     const venueCityName = v.name.toLowerCase().includes(city.toLowerCase()) ? v.name : v.name + ' ' + city;
-    const gq = encodeURIComponent(`"${venueCityName}" site:venuedirectory.com`);
-    const gqFallback = encodeURIComponent(`"${venueCityName}" events email`);
-    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email||''}</div><a href="https://www.venuedirectory.com/conference-rooms-for-rent-near/${encodeURIComponent(city)}/generic/1?keyword=${encodeURIComponent(venueCityName)}&lsType=b" target="_blank" class="google-link" style="display:block;margin-bottom:3px;">&#127968; Venue Directory: ${venueCityName}</a><a href="https://www.google.com/search?q=${gqFallback}" target="_blank" class="google-link">&#128269; Google: ${venueCityName} events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
+    const vdUrl = `https://www.venuedirectory.com/conference-rooms-for-rent-near/${encodeURIComponent(city)}/generic/1?keyword=${encodeURIComponent(venueCityName)}&lsType=b`;
+    const gq = encodeURIComponent(`"${venueCityName}" events email conference`);
+    div.innerHTML = `<div class="email-result-header"><div class="email-venue-name">${v.name}</div><span class="status-badge badge-notfound" id="badge-${v.id}">Pending</span></div><div id="email-val-${v.id}" class="email-address">${v.email || ''}</div><a href="${vdUrl}" target="_blank" class="google-link" style="display:block;margin-bottom:3px;">🏨 Venue Directory: ${venueCityName}</a><a href="https://www.google.com/search?q=${gq}" target="_blank" class="google-link">🔍 Google: ${venueCityName} events email</a><div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="text" id="manual-${v.id}" placeholder="Paste email manually..." style="flex:1;font-size:13px;padding:6px 10px;" /><button class="btn btn-secondary btn-sm" onclick="saveManualEmail(${v.id})">Save</button></div>`;
     container.appendChild(div);
     if (v.email) updateEmailResult(v.id, v.email, 'found');
   }
@@ -629,7 +691,52 @@ function updateEmailResult(id, email, status) {
 function saveManualEmail(id) { const v = document.getElementById('manual-'+id).value.trim(); if (v) updateEmailResult(id, v, 'found'); }
 
 async function aiSearchVenue(venue) {
-  return { email: null, capacity: null, bedrooms: null, dataSource: 'notfound' };
+  if (!apiKeyStored) return { email: null, capacity: null, bedrooms: null };
+  const location = document.getElementById('location').value.trim();
+  const city = location.split(',')[0].trim();
+  const venueCityName = venue.name.toLowerCase().includes(city.toLowerCase()) ? venue.name : `${venue.name} ${city}`;
+
+  const prompt = `Search venuedirectory.com for "${venueCityName}" UK. Find their listing page and visit it. Extract the events/conference email address (shown as "Email: someone@venue.com" in the contacts section), max delegate capacity, and bedroom count.
+
+Also try searching: "${venueCityName}" events email conference UK
+
+Return ONLY this JSON, no other text:
+{"email":"events@venue.com","emailFound":true,"capacity":150,"bedroomsFound":80,"dataSource":"venuedirectory"}
+
+Use null for any value not found. emailFound must be true or false.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKeyStored,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await resp.json();
+    if (data.error) { console.warn('API error:', data.error); return { email: null, capacity: null, bedrooms: null }; }
+    const fullText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    const jsonMatches = [...fullText.matchAll(/\{[^{}]*"emailFound"[^{}]*\}/g)];
+    if (!jsonMatches.length) return { email: null, capacity: null, bedrooms: null };
+    const parsed = JSON.parse(jsonMatches[jsonMatches.length - 1][0]);
+    return {
+      email: parsed.emailFound && parsed.email ? parsed.email : null,
+      capacity: parsed.capacity || null,
+      bedrooms: parsed.bedroomsFound || null,
+      dataSource: parsed.dataSource || 'unknown'
+    };
+  } catch(e) {
+    console.warn('aiSearchVenue error:', venue.name, e.message);
+    return { email: null, capacity: null, bedrooms: null };
+  }
 }
 
 async function aiSearchEmail(venue) {
@@ -642,13 +749,37 @@ async function findAllEmails() {
   if (!venues.length) return;
   const location = document.getElementById('location').value.trim();
   const city = location.split(',')[0].trim();
-  // Open Venue Directory search for each selected venue in new tabs
-  for (const v of venues) {
-    const venueCityName = v.name.toLowerCase().includes(city.toLowerCase()) ? v.name : v.name + ' ' + city;
-    const vdUrl = `https://www.venuedirectory.com/conference-rooms-for-rent-near/${encodeURIComponent(city)}/generic/1?keyword=${encodeURIComponent(venueCityName)}&lsType=b`;
-    window.open(vdUrl, '_blank');
-    await new Promise(r => setTimeout(r, 300));
+
+  document.getElementById('progressWrap').style.display = 'block';
+
+  for (let i = 0; i < venues.length; i++) {
+    const v = venues[i];
+    document.getElementById('progressFill').style.width = ((i / venues.length) * 100) + '%';
+    document.getElementById('progressText').textContent = `Searching ${i + 1} of ${venues.length}: ${v.name}`;
+    updateEmailResult(v.id, '', 'searching');
+
+    // Search local database
+    const dbMatch = searchVenueInDatabase(v.name, city);
+    if (dbMatch) {
+      // Update capacity data from database
+      if (dbMatch.capacity || dbMatch.bedrooms) {
+        v.aiCapacity = dbMatch.capacity;
+        v.aiBedrooms = dbMatch.bedrooms;
+        v.aiDataSource = 'venuedirectory';
+        renderPage();
+      }
+      const email = dbMatch.email || v.email || '';
+      updateEmailResult(v.id, email, email ? 'found' : 'not-found');
+    } else {
+      updateEmailResult(v.id, v.email || '', v.email ? 'found' : 'not-found');
+    }
+    await new Promise(r => setTimeout(r, 50));
   }
+
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('progressText').textContent = 'Search complete.';
+  setTimeout(() => { document.getElementById('progressWrap').style.display = 'none'; }, 2000);
+  buildCopySection();
 }
 
 function buildCopySection() {
